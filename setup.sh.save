@@ -1,0 +1,156 @@
+#!/bin/bash
+
+set -e
+
+echo "🚀 Fashion Starter + Laravel + Moodle Integration Setup"
+echo "========================================================"
+echo ""
+
+# Colores para output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Función para imprimir mensajes
+print_success() {
+    echo -e "${GREEN}✅ $1${NC}"
+}
+
+print_error() {
+    echo -e "${RED}❌ $1${NC}"
+}
+
+print_info() {
+    echo -e "${YELLOW}ℹ️  $1${NC}"
+}
+
+# 1. Conectar redes Docker
+echo "📡 Paso 1: Conectando contenedores a shared-network..."
+docker network connect shared-network medusa-postgres-1 2>/dev/null || print_info "medusa-postgres-1 ya conectado"
+docker network connect shared-network medusa-redis-1 2>/dev/null || print_info "medusa-redis-1 ya conectado"
+docker network connect shared-network laravel-app 2>/dev/null || print_info "laravel-app ya conectado"
+docker network connect shared-network laravel-nginx 2>/dev/null || print_info "laravel-nginx ya conectado"
+docker network connect shared-network laravel-db 2>/dev/null || print_info "laravel-db ya conectado"
+docker network connect shared-network laravel-redis 2>/dev/null || print_info "laravel-redis ya conectado"
+docker network connect shared-network laravel-worker 2>/dev/null || print_info "laravel-worker ya conectado"
+docker network connect shared-network moodle-docker-webserver-1 2>/dev/null || print_info "moodle-docker-webserver-1 ya conectado"
+docker network connect shared-network moodle-docker-db-1 2>/dev/null || print_info "moodle-docker-db-1 ya conectado"
+print_success "Redes conectadas"
+echo ""
+
+# 2. Verificar conectividad
+echo "🔍 Paso 2: Verificando conectividad..."
+if docker exec laravel-app ping -c 2 moodle-docker-webserver-1 > /dev/null 2>&1; then
+    print_success "Laravel puede conectarse a Moodle"
+else
+    print_error "Laravel NO puede conectarse a Moodle"
+    exit 1
+fi
+
+if docker exec laravel-app ping -c 2 laravel-nginx > /dev/null 2>&1; then
+    print_success "Laravel puede conectarse a Nginx"
+else
+    print_error "Laravel NO puede conectarse a Nginx"
+    exit 1
+fi
+echo ""
+
+# 3. Configurar Laravel
+echo "⚙️  Paso 3: Configurando Laravel..."
+
+# Copiar archivos
+print_info "Copiando MoodleService.php..."
+# Asume que tienes los archivos en el directorio actual
+# docker cp MoodleService.php laravel-app:/var/www/html/app/Services/MoodleService.php
+
+print_info "Copiando MedusaWebhookController.php..."
+# docker cp MedusaWebhookController.php laravel-app:/var/www/html/app/Http/Controllers/Api/MedusaWebhookController.php
+
+# Ejecutar migración
+print_info "Ejecutando migraciones..."
+docker exec laravel-app php artisan migrate --force
+
+# Limpiar caché
+print_info "Limpiando caché de Laravel..."
+docker exec laravel-app php artisan config:clear
+docker exec laravel-app php artisan cache:clear
+docker exec laravel-app php artisan route:clear
+
+print_success "Laravel configurado"
+echo ""
+
+# 4. Configurar Medusa
+echo "⚙️  Paso 4: Configurando Medusa (Fashion Starter)..."
+
+# Verificar si existe el directorio del backend
+if [ -d "/Users/omarmaldonado/Desktop/alfa nuevo/fashion-starter/medusa" ]; then
+    cd /Users/omarmaldonado/Desktop/alfa nuevo/fashion-starter/medusa
+    
+    print_info "Instalando axios en Medusa..."
+    npm install axios --save
+    
+    print_info "Verificando subscriber..."
+    if [ -f "src/subscribers/order-webhook.ts" ]; then
+        print_success "Subscriber encontrado"
+    else
+        print_error "Subscriber no encontrado. Por favor copia el archivo order-webhook.ts"
+    fi
+    
+    cd ../..
+else
+    print_error "Directorio fashion-starter/backend no encontrado"
+    print_info "Por favor asegúrate de estar en el directorio correcto"
+fi
+echo ""
+
+# 5. Test de conexión a Moodle
+echo "🔍 Paso 5: Probando conexión con Moodle..."
+MOODLE_TEST=$(docker exec laravel-app php artisan tinker --execute="(new \App\Services\MoodleService())->testConnection() ? 'SUCCESS' : 'FAILED'")
+
+if [[ $MOODLE_TEST == *"SUCCESS"* ]]; then
+    print_success "Conexión con Moodle exitosa"
+else
+    print_error "No se pudo conectar con Moodle"
+    print_info "Asegúrate de configurar MOODLE_TOKEN en el .env de Laravel"
+fi
+echo ""
+
+# 6. Test de webhook endpoint
+echo "🔍 Paso 6: Probando endpoint de webhook..."
+WEBHOOK_TEST=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/health)
+
+if [ "$WEBHOOK_TEST" = "200" ]; then
+    print_success "Endpoint de Laravel accesible"
+else
+    print_error "No se pudo acceder al endpoint de Laravel"
+    print_info "Verifica que Nginx esté corriendo en el puerto 8080"
+fi
+echo ""
+
+# 7. Mostrar información importante
+echo "📋 Información importante:"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "🔗 URLs de servicios:"
+echo "   Laravel:    http://localhost:8080"
+echo "   Moodle:     http://localhost:8020"
+echo "   Health:     http://localhost:8080/api/health"
+echo "   Webhook:    http://laravel-nginx:80/api/webhooks/medusa/order-paid"
+echo ""
+echo "🔐 Configuración pendiente:"
+echo "   1. Configurar Web Services en Moodle"
+echo "   2. Obtener token de Moodle y agregarlo a Laravel .env"
+echo "   3. Agregar LARAVEL_WEBHOOK_URL en Medusa .env"
+echo "   4. Reiniciar contenedores de Medusa"
+echo ""
+echo "📝 Comandos útiles:"
+echo "   Ver logs Laravel:  docker logs -f laravel-app"
+echo "   Ver logs Nginx:    docker logs -f laravel-nginx"
+echo "   Ver logs Moodle:   docker logs -f moodle-docker-webserver-1"
+echo "   Test Moodle:       curl http://localhost:8080/api/moodle/test"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+print_success "Instalación completada"
+echo ""
