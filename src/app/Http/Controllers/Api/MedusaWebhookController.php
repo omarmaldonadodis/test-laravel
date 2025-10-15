@@ -4,21 +4,19 @@ namespace App\Http\Controllers\Api;
 
 use App\DTOs\MedusaOrderDTO;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\WebhookResponseResource;
+use App\Http\Resources\ErrorResource;
 use App\Jobs\CreateMoodleUserJob;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
-/**
- * Controlador de Webhooks de Medusa
- * Principio: Single Responsibility - Solo recibe webhooks y despacha jobs
- */
 class MedusaWebhookController extends Controller
 {
     /**
      * Maneja el webhook de Medusa cuando se paga un pedido.
      * 
-     * Ahora es ASÍNCRONO - solo valida y despacha jobs a la cola
+     * Ahora usa API Resources para respuestas consistentes
      */
     public function handleOrderPaid(Request $request): JsonResponse
     {
@@ -38,10 +36,12 @@ class MedusaWebhookController extends Controller
                     'email' => $orderDTO->customerEmail,
                 ]);
                 
-                return response()->json([
-                    'error' => 'Invalid webhook payload',
-                    'message' => 'Email is required and must be valid',
-                ], 400);
+                // ✅ Usar ErrorResource
+                return (new ErrorResource([
+                    'message' => 'Invalid webhook payload: Email is required and must be valid',
+                    'code' => 'INVALID_PAYLOAD',
+                    'status' => 400,
+                ]))->response();
             }
 
             // Despachar job a la cola (ASÍNCRONO)
@@ -52,12 +52,15 @@ class MedusaWebhookController extends Controller
                 'email' => $orderDTO->customerEmail,
             ]);
 
-            // Responder inmediatamente a Medusa (no esperar procesamiento)
-            return response()->json([
+            // Usar WebhookResponseResource
+            return (new WebhookResponseResource([
                 'message' => 'Webhook received and queued for processing',
-                'order_id' => $orderDTO->orderId,
                 'status' => 'queued',
-            ], 202); // 202 Accepted
+                'order_id' => $orderDTO->orderId,
+                'customer_email' => $orderDTO->customerEmail,
+                'queued_at' => now(),
+                'job_class' => CreateMoodleUserJob::class,
+            ]))->response();
 
         } catch (\Throwable $e) {
             Log::error('❌ Error al procesar webhook', [
@@ -65,11 +68,14 @@ class MedusaWebhookController extends Controller
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            return response()->json([
-                'error' => 'Error processing webhook',
-                'message' => 'The webhook has been received but could not be queued',
-                'details' => config('app.debug') ? $e->getMessage() : null,
-            ], 500);
+            // Usar ErrorResource
+            return (new ErrorResource([
+                'message' => 'Error processing webhook',
+                'code' => 'WEBHOOK_ERROR',
+                'status' => 500,
+                'exception' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+            ]))->response();
         }
     }
 

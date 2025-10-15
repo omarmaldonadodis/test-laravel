@@ -11,8 +11,9 @@ return [
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
 
     'allowed_methods' => ['*'],
+    //Por lo pronto se modifican según como se tenga configurado el puerto
+    'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost')),
 
-    'allowed_origins' => ['*'],
 
     'allowed_origins_patterns' => [],
 
@@ -22,5 +23,5 @@ return [
 
     'max_age' => 0,
 
-    'supports_credentials' => false,
+    'supports_credentials' => true,
 ];

@@ -1,7 +1,6 @@
 <?php
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\MedusaWebhookController;
-use App\Http\Middleware\CorsMiddleware; // Asegúrate de importar tu middleware
 
 /*
 |--------------------------------------------------------------------------
@@ -11,7 +10,7 @@ use App\Http\Middleware\CorsMiddleware; // Asegúrate de importar tu middleware
 
 // Webhooks de Medusa con validación HMAC
 Route::prefix('webhooks/medusa')
-    ->middleware(['verify.webhook', CorsMiddleware::class])
+    ->middleware(['verify.webhook'])
     ->group(function () {
         Route::post('/order-paid', [MedusaWebhookController::class, 'handleOrderPaid'])
             ->name('webhooks.medusa.order-paid');
@@ -19,22 +18,10 @@ Route::prefix('webhooks/medusa')
     });
 
 
-// Ruta de prueba para verificar conectividad
-Route::get('/health', function () {
-    return response()->json([
-        'status' => 'ok',
-        'service' => 'Laravel Webhook Gateway',
-        'timestamp' => now()->toIso8601String(),
-    ]);
-})->name('health');
+// Endpoints de EnrollmentLogs (protegidos)
+Route::middleware(['auth:sanctum'])->prefix('enrollment-logs')->group(function () {
+    Route::get('/', [EnrollmentLogController::class, 'index'])->name('enrollment-logs.index');
+    Route::get('/{id}', [EnrollmentLogController::class, 'show'])->name('enrollment-logs.show');
+    Route::get('/order/{orderId}', [EnrollmentLogController::class, 'showByOrderId'])->name('enrollment-logs.by-order');
+});
 
-// Ruta de prueba para Moodle
-Route::get('/moodle/test', function () {
-    $moodleService = app(\App\Services\MoodleService::class);
-    $connected = $moodleService->testConnection();
-    
-    return response()->json([
-        'moodle_connected' => $connected,
-        'moodle_url' => env('MOODLE_URL'),
-    ]);
-})->name('moodle.test');

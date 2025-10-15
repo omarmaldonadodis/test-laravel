@@ -15,9 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         // Register custom Stripe middleware
-        $middleware->alias([
+       /* $middleware->alias([
             'verify.stripe.webhook' => VerifyStripeWebhook::class,
-        ]);
+        ]);*/
         
         // Exclude the webhook route from CSRF verification if necessary
         $middleware->alias([
