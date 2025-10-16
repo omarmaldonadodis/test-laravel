@@ -37,4 +37,6 @@ interface MoodleServiceInterface
      * Genera contraseña segura
      */
     public function generatePassword(int $length = 12): string;
+
+    
 }
