@@ -4,51 +4,45 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class VerifyWebhookSignature
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $secret = config('services.medusa.medusa_webhook_secret');
-        
-        if (!$secret) {
-            \Log::error('🔴 Webhook secret not configured in Laravel');
-            return response()->json(['error' => 'Server configuration error'], 500);
-        }
-
-        $signature = $request->header('x-medusa-signature');
-        
-        if (!$signature) {
-            \Log::warning('⚠️ Webhook without signature', ['ip' => $request->ip()]);
-            return response()->json(['error' => 'Missing signature'], 401);
-        }
-
+        $signature = $request->header('X-Medusa-Signature');
         $payload = $request->getContent();
+        $secret = config('services.medusa.webhook_secret');
+
+        if (empty($signature) || empty($secret)) {
+            Log::warning('Webhook signature verification failed: missing signature or secret');
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
         $expectedSignature = hash_hmac('sha256', $payload, $secret);
 
-        // 🐛 DEBUG: Logs detallados
-        \Log::info('🔍 DEBUG WEBHOOK VALIDATION:', [
-            'secret_length' => strlen($secret),
-            'secret_preview' => substr($secret, 0, 10) . '...',
-            'received_signature' => $signature,
-            'expected_signature' => $expectedSignature,
-            'signatures_match' => hash_equals($expectedSignature, $signature),
-            'payload_length' => strlen($payload),
-            'payload_preview' => substr($payload, 0, 150),
-            'ip' => $request->ip(),
-        ]);
-
         if (!hash_equals($expectedSignature, $signature)) {
-            \Log::warning('❌ Invalid webhook signature', [
-                'ip' => $request->ip(),
-                'received' => substr($signature, 0, 20) . '...',
-                'expected' => substr($expectedSignature, 0, 20) . '...',
-            ]);
+            // SOLO log en desarrollo, SIN datos sensibles
+            if (app()->environment('local', 'development')) {
+                Log::warning('Webhook signature mismatch', [
+                    'signature_present' => !empty($signature),
+                    'payload_length' => strlen($payload),
+                    'signature_format_valid' => ctype_xdigit($signature ?? ''),
+                ]);
+            } else {
+                // En producción, log mínimo
+                Log::warning('Webhook signature verification failed');
+            }
+
             return response()->json(['error' => 'Invalid signature'], 401);
         }
 
-        \Log::info('✅ Webhook signature validated successfully');
+        // Log exitoso solo en desarrollo
+        if (app()->environment('local', 'development')) {
+            Log::info('Webhook signature verified successfully');
+        }
+
         return $next($request);
     }
 }

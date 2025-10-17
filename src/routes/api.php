@@ -1,6 +1,7 @@
 <?php
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\MedusaWebhookController;
+use App\Http\Controllers\Api\EnrollmentLogController;
 
 /*
 |--------------------------------------------------------------------------

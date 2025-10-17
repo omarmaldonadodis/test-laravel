@@ -21,8 +21,8 @@ class CreateMoodleUserJobTest extends TestCase
         parent::tearDown();
     }
 
-    /** @test */
-    public function it_creates_moodle_user_and_fires_event(): void
+    
+    public function test_it_creates_moodle_user_and_fires_event(): void
     {
         // Arrange
         Event::fake();
@@ -66,8 +66,7 @@ class CreateMoodleUserJobTest extends TestCase
         Event::assertDispatched(MoodleUserCreated::class);
     }
 
-    /** @test */
-    public function it_handles_invalid_order_data(): void
+    public function test_it_handles_invalid_order_data(): void
     {
         // Arrange
         $orderDTO = new MedusaOrderDTO(
