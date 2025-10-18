@@ -12,20 +12,20 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 
 # 1. Obtener secret
 echo -e "${YELLOW}1️⃣  Obteniendo configuración...${NC}"
-SECRET=$(docker exec laravel-app php artisan tinker --execute="echo config('services.medusa.webhook_secret');")
+SECRET=$(docker exec laravel-app php artisan tinker --execute="echo config('services.medusa.medusa_webhook_secret');")
 SECRET=$(echo "$SECRET" | tr -d '\n' | tr -d '\r')
 
 echo -e "  ${GREEN}✅${NC} Secret configurado (${#SECRET} chars)"
 
 # 2. Crear payload con estructura correcta de Medusa
 TIMESTAMP=$(date +%s)
-EMAIL="test${TIMESTAMP}@example.com"
+EMAIL="testsd@example.com"
 ORDER_ID="order_${TIMESTAMP}"
 
 # Payload que coincide con la estructura que espera MedusaOrderDTO
 PAYLOAD=$(cat <<EOF
 {
-  "id": "${ORDER_ID}",
+  "id": "order_test_123456",
   "type": "order.paid",
   "customer": {
     "id": "cus_${TIMESTAMP}",
@@ -63,7 +63,7 @@ echo -e "\n${YELLOW}4️⃣  Validando signature...${NC}"
 docker exec laravel-app php artisan tinker --execute="
 \$payload = '${PAYLOAD}';
 \$signature = '${SIGNATURE}';
-\$expected = hash_hmac('sha256', \$payload, config('services.medusa.webhook_secret'));
+\$expected = hash_hmac('sha256', \$payload, config('services.medusa.medusa_webhook_secret'));
 if (hash_equals(\$expected, \$signature)) {
     echo '✅ Signature válida' . PHP_EOL;
 } else {
