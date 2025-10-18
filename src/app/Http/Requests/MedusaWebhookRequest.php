@@ -12,26 +12,20 @@ class MedusaWebhookRequest extends FormRequest
         return true;
     }
 
+    
+
     public function rules(): array
     {
-        return [
-            'id' => 'nullable|string',
-            'type' => 'nullable|string',
-            'data' => 'nullable|array',
-            'order' => 'nullable|array',
-            
-            // Validaciones flexibles para ambos formatos (data.* o order.*)
-            'data.id' => 'nullable|string',
-            'data.email' => 'nullable|email',
-            'data.customer_id' => 'nullable|string',
-            'data.items' => 'nullable|array',
-            
-            'order.id' => 'nullable|string',
-            'order.email' => 'nullable|email',
-            'order.customer_id' => 'nullable|string',
-            'order.items' => 'nullable|array',
-            
-        ];
+            return [
+        'id' => 'nullable|string',
+        'type' => 'nullable|string',
+        'customer' => 'required|array',
+        'customer.email' => 'required|email',
+        'customer.first_name' => 'required|string',
+        'customer.last_name' => 'required|string',
+        'customer.id' => 'nullable|string',
+        'items' => 'required|array|min:1',
+      ];
     }
 
     public function messages(): array

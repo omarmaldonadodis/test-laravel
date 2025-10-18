@@ -16,7 +16,7 @@ class VerifyWebhookSignatureSecurityTest extends TestCase
     {
         parent::setUp();
         $this->middleware = new VerifyWebhookSignature();
-        config(['services.medusa.webhook_secret' => 'test-secret-key']);
+        config(['services.medusa.medusa_webhook_secret' => 'test-secret-key']);
     }
 
     

@@ -8,49 +8,30 @@ use App\Http\Requests\MedusaWebhookRequest;
 use App\Http\Resources\WebhookResponseResource;
 use App\Http\Resources\ErrorResource;
 use App\Jobs\CreateMoodleUserJob;
-use App\Services\Webhook\WebhookIdempotencyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 
-/**
- * Handles Medusa webhooks for order processing
- * 
- * Follows Dependency Inversion Principle by depending on WebhookIdempotencyService
- */
 class MedusaWebhookController extends Controller
 {
-    public function __construct(
-        private WebhookIdempotencyService $idempotencyService
-    ) {}
-
     /**
-     * Handle order paid webhook from Medusa
+     * Maneja el webhook de Medusa cuando se paga un pedido.
+     * 
+     * Ahora usa FormRequest para validación y API Resources para respuestas
      */
     public function handleOrderPaid(MedusaWebhookRequest $request): JsonResponse
     {
         try {
-            $payload = $request->validatedForDTO();
-            Log::info('Webhook payload para DTO', [
-                'payload' => $payload,
-                'customer_email_path' => Arr::get($payload, 'customer.email', null),
-            ]);
-
-            $webhookId = $this->extractWebhookId($payload);
-            
-            Log::info('✅ Webhook recibido desde Medusa', [
-                'webhook_id' => $webhookId,
+            Log::info('Webhook recibido desde Medusa', [
+                'payload' => $request->validated(),
                 'ip' => $request->ip(),
             ]);
 
-            // Create DTO from validated payload
-            $orderDTO = MedusaOrderDTO::fromWebhookPayload($payload);
-            
+            // Crear DTO desde payload validado
+            $orderDTO = MedusaOrderDTO::fromWebhookPayload($request->validatedForDTO());
 
-            // Validate minimum required data
+            // Validar datos mínimos
             if (!$orderDTO->isValid()) {
                 Log::warning('⚠️ Payload inválido del webhook', [
-                    'webhook_id' => $webhookId,
                     'order_id' => $orderDTO->orderId,
                     'email' => $orderDTO->customerEmail,
                 ]);
@@ -62,36 +43,10 @@ class MedusaWebhookController extends Controller
                 ]))->response();
             }
 
-            // ✅ Check idempotency using service (SRP + DIP)
-            $idempotencyCheck = $this->idempotencyService->canProcessWebhook(
-                $webhookId,
-                $orderDTO->orderId,
-                $orderDTO->customerEmail
-            );
-
-            // Handle duplicate cases
-            if (!$idempotencyCheck['can_process']) {
-                return $this->handleDuplicateWebhook(
-                    $idempotencyCheck,
-                    $webhookId,
-                    $orderDTO,
-                    $payload
-                );
-            }
-
-            // ✅ Process new webhook
-            $this->idempotencyService->markWebhookAsProcessed(
-                $webhookId,
-                $orderDTO->orderId,
-                $payload,
-                $payload['type'] ?? 'order.paid'
-            );
-
-            // Dispatch job to queue
+            // Despachar job a la cola (ASÍNCRONO)
             CreateMoodleUserJob::dispatch($orderDTO);
 
             Log::info('📤 Job despachado a la cola', [
-                'webhook_id' => $webhookId,
                 'order_id' => $orderDTO->orderId,
                 'email' => $orderDTO->customerEmail,
             ]);
@@ -122,71 +77,7 @@ class MedusaWebhookController extends Controller
     }
 
     /**
-     * Handle duplicate webhook scenarios
-     */
-    private function handleDuplicateWebhook(
-        array $idempotencyCheck,
-        string $webhookId,
-        MedusaOrderDTO $orderDTO,
-        array $payload
-    ): JsonResponse {
-        $reason = $idempotencyCheck['reason'];
-
-        Log::info("🔄 Webhook duplicado: {$reason}", [
-            'webhook_id' => $webhookId,
-            'order_id' => $orderDTO->orderId,
-            'email' => $orderDTO->customerEmail,
-        ]);
-
-        // If user exists, link this order to them
-        if ($reason === 'user_exists' && isset($idempotencyCheck['user'])) {
-            $this->idempotencyService->linkOrderToExistingUser(
-                $idempotencyCheck['user'],
-                $orderDTO->orderId
-            );
-
-            // Still mark this webhook as processed
-            $this->idempotencyService->markWebhookAsProcessed(
-                $webhookId,
-                $orderDTO->orderId,
-                $payload
-            );
-
-            return (new WebhookResponseResource([
-                'message' => $idempotencyCheck['message'],
-                'status' => $reason,
-                'order_id' => $orderDTO->orderId,
-                'customer_email' => $orderDTO->customerEmail,
-                'moodle_user_id' => $idempotencyCheck['user']->moodle_user_id,
-            ]))->response()->setStatusCode(200);
-        }
-
-        // For other duplicate cases, just return success
-        return (new WebhookResponseResource([
-            'message' => $idempotencyCheck['message'],
-            'status' => $reason,
-            'order_id' => $orderDTO->orderId,
-            'customer_email' => $orderDTO->customerEmail,
-        ]))->response()->setStatusCode(200);
-    }
-
-    /**
-     * Extract or generate webhook ID
-     */
-    private function extractWebhookId(array $payload): string
-    {
-        if (isset($payload['id'])) {
-            return $payload['id'];
-        }
-
-        $orderId = $payload['order']['id'] ?? $payload['data']['id'] ?? 'unknown';
-        $timestamp = now()->timestamp;
-        
-        return 'webhook_' . $orderId . '_' . $timestamp . '_' . Str::random(8);
-    }
-
-    /**
-     * Health check endpoint
+     * Endpoint de health check para webhooks
      */
     public function healthCheck(): JsonResponse
     {

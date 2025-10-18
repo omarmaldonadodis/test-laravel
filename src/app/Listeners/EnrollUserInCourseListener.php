@@ -4,33 +4,50 @@ namespace App\Listeners;
 
 use App\Events\MoodleUserCreated;
 use App\Jobs\EnrollUserInCourseJob;
+use App\Models\User;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 
-/**
- * Listener: Inscribir usuario cuando se crea
- * Principio: Single Responsibility - Solo dispara jobs de inscripción
- */
+
 class EnrollUserInCourseListener implements ShouldQueue
 {
-    /**
-     * Maneja el evento
-     */
     public function handle(MoodleUserCreated $event): void
     {
-        Log::info('🎧 Listener: Procesando inscripciones', [
-            'user_id' => $event->user->id,
-            'order_id' => $event->order->orderId,
+        // Logging completo del evento
+        Log::info('🎧 Listener: Payload completo recibido', [
+            'user' => $event->user ? $event->user->toArray() : null,
+            'order' => $event->order ? $event->order->toArray() : null,
         ]);
 
+        // Convertir DTO a modelo User
+        $userDto = $event->user;
+        if (!$userDto || empty($userDto->email)) {
+            Log::error('❌ Usuario inválido, no se puede despachar job de inscripción', [
+                'user' => $userDto ? $userDto->toArray() : null,
+            ]);
+            return;
+        }
+
+        $user = User::updateOrCreate(
+            ['email' => $userDto->email],
+            [
+                'name' => $userDto->fullName ?? ($userDto->firstName . ' ' . $userDto->lastName),
+                'moodle_user_id' => $userDto->id,
+                'medusa_order_id' => $event->order->orderId ?? null,
+            ]
+        );
+
         // Obtener cursos desde la orden
-        $courseIds = $event->order->getCourseIds();
+        $courseIds = [];
+        if (method_exists($event->order, 'getCourseIds')) {
+            $courseIds = $event->order->getCourseIds() ?? [];
+        }
 
         // Si no hay cursos, usar el curso por defecto
         if (empty($courseIds)) {
             $defaultCourseId = config('services.moodle.default_course_id', 2);
             $courseIds = [$defaultCourseId];
-            
+
             Log::warning('⚠️ No se encontraron cursos en items, usando curso por defecto', [
                 'default_course_id' => $defaultCourseId,
             ]);
@@ -38,23 +55,20 @@ class EnrollUserInCourseListener implements ShouldQueue
 
         // Despachar job para cada curso
         foreach ($courseIds as $courseId) {
-            EnrollUserInCourseJob::dispatch($event->user, (int) $courseId)
-                ->delay(now()->addSeconds(5)); // Pequeño delay para evitar rate limiting
+            EnrollUserInCourseJob::dispatch($user, (int) $courseId)
+                ->delay(now()->addSeconds(5));
 
             Log::info('📤 Job de inscripción despachado', [
-                'user_id' => $event->user->id,
+                'user_id' => $user->id,
                 'course_id' => $courseId,
             ]);
         }
     }
 
-    /**
-     * Maneja el fallo del listener
-     */
     public function failed(MoodleUserCreated $event, \Throwable $exception): void
     {
         Log::error('💥 Listener EnrollUserInCourseListener falló', [
-            'user_id' => $event->user->id,
+            'user_id' => $event->user->id ?? null,
             'error' => $exception->getMessage(),
         ]);
     }

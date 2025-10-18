@@ -4,7 +4,6 @@ namespace App\DTOs;
 
 use Illuminate\Support\Arr;
 
-
 /**
  * DTO para encapsular datos de órdenes de Medusa
  * Principio: Single Responsibility - Solo maneja datos de órdenes

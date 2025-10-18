@@ -4,7 +4,6 @@ namespace App\Providers;
 
 use App\Contracts\MoodleServiceInterface;
 use App\Services\MoodleService;
-use App\Services\Webhook\WebhookIdempotencyService;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -18,12 +17,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Bind de interfaces a implementaciones concretas
-        // Principio: Dependency Inversion - los jobs dependen de interfaces
+        // Bind de MoodleServiceInterface a MoodleService
+        // Principio: Dependency Inversion - los jobs dependen de la interfaz
         $this->app->singleton(MoodleServiceInterface::class, MoodleService::class);
-
-        // Bind de servicios concretos que no tienen interfaz
-        $this->app->singleton(WebhookIdempotencyService::class);
     }
 
     /**
