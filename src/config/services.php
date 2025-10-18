@@ -52,7 +52,7 @@ return [
     'medusa' => [
         'url' => env('MEDUSA_URL'),
         'publishable_key' => env('MEDUSA_PUBLISHABLE_KEY'),
-        'medusa_webhook_secret' => env('MEDUSA_WEBHOOK_SECRET'),
+        'webhook_secret' => env('MEDUSA_WEBHOOK_SECRET'),
     ],
 
 ];

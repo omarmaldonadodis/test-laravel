@@ -30,6 +30,7 @@ class MedusaWebhookRequest extends FormRequest
             'order.email' => 'nullable|email',
             'order.customer_id' => 'nullable|string',
             'order.items' => 'nullable|array',
+            
         ];
     }
 

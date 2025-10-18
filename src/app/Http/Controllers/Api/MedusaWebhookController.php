@@ -31,6 +31,11 @@ class MedusaWebhookController extends Controller
     {
         try {
             $payload = $request->validatedForDTO();
+            Log::info('Webhook payload para DTO', [
+                'payload' => $payload,
+                'customer_email_path' => Arr::get($payload, 'customer.email', null),
+            ]);
+
             $webhookId = $this->extractWebhookId($payload);
             
             Log::info('✅ Webhook recibido desde Medusa', [
@@ -40,6 +45,7 @@ class MedusaWebhookController extends Controller
 
             // Create DTO from validated payload
             $orderDTO = MedusaOrderDTO::fromWebhookPayload($payload);
+            
 
             // Validate minimum required data
             if (!$orderDTO->isValid()) {
