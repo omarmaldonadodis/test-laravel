@@ -4,27 +4,28 @@ namespace App\Services;
 
 use App\Contracts\MoodleServiceInterface;
 use App\Exceptions\MoodleServiceException;
+use App\Services\RateLimiting\MoodleRateLimiter;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Http\Client\ConnectionException;
 
-/**
- * Servicio de integración con Moodle
- * Implementa: MoodleServiceInterface (Dependency Inversion Principle)
- */
 class MoodleService implements MoodleServiceInterface
 {
     private string $moodleUrl;
     private string $token;
     private int $timeout;
+    private MoodleRateLimiter $rateLimiter;
 
-    public function __construct(private CacheRepository $cache)
-    {
+    public function __construct(
+        private CacheRepository $cache,
+        MoodleRateLimiter $rateLimiter
+    ) {
         $this->moodleUrl = rtrim(config('services.moodle.url'), '/');
         $this->token = config('services.moodle.token');
-        $this->timeout = 30;
+        $this->timeout = config('services.moodle.timeout', 30); // ✅ Ahora configurable
+        $this->rateLimiter = $rateLimiter;
 
         if (empty($this->token)) {
             Log::error('MOODLE_TOKEN no está configurado en el archivo .env');
@@ -34,6 +35,7 @@ class MoodleService implements MoodleServiceInterface
             'url' => $this->moodleUrl,
             'token_defined' => !empty($this->token),
             'timeout' => $this->timeout,
+            'rate_limit_enabled' => config('services.moodle.rate_limit.enabled'),
         ]);
     }
 
@@ -116,24 +118,27 @@ class MoodleService implements MoodleServiceInterface
     /** Busca usuario por email */
     public function getUserByEmail(string $email): ?array
     {
-        return Cache::remember("moodle_user_{$email}", 3600, function () use ($email) {
-            try {
-                $response = $this->callWebService('core_user_get_users_by_field', [
-                    'field' => 'email',
-                    'values' => [$email],
-                ]);
+        return Cache::remember(
+            "moodle_user_{$email}", 
+            config('services.moodle.cache_ttl', 3600), // ✅ Configurable
+            function () use ($email) {           
+                try {
+                    $response = $this->callWebService('core_user_get_users_by_field', [
+                        'field' => 'email',
+                        'values' => [$email],
+                    ]);
 
-                if (is_array($response) && count($response) > 0 && isset($response[0]['id'])) {
-                    return $response[0];
+                    if (is_array($response) && count($response) > 0 && isset($response[0]['id'])) {
+                        return $response[0];
+                    }
+                    return null;
+                } catch (\Exception $e) {
+                    Log::error('❌ Error al obtener usuario por email', [
+                        'error' => $e->getMessage(),
+                        'email' => $email,
+                    ]);
+                    return null;
                 }
-                return null;
-            } catch (\Exception $e) {
-                Log::error('❌ Error al obtener usuario por email', [
-                    'error' => $e->getMessage(),
-                    'email' => $email,
-                ]);
-                return null;
-            }
         });
     }
 
@@ -188,10 +193,16 @@ class MoodleService implements MoodleServiceInterface
     {
         $username = preg_replace('/[^a-zA-Z0-9]/', '', explode('@', $email)[0]);
         $username = strtolower($username);
+        
         if (strlen($username) < 4) {
             $username = substr(md5($email), 0, 8);
         }
-        return $username . time();
+        
+        // ✅ Usar uniqid con más entropía
+        $uniqueSuffix = uniqid('', true); // true = más entropía
+        $uniqueSuffix = str_replace('.', '', $uniqueSuffix); // Remover punto
+        
+        return $username . substr($uniqueSuffix, -10); // Últimos 10 caracteres
     }
 
     /** Genera contraseña segura */
@@ -232,9 +243,14 @@ class MoodleService implements MoodleServiceInterface
         }
     }
 
-    /** Llamada genérica al API Moodle */
+     /**
+     * Llamada genérica al API Moodle con rate limiting
+     */
     private function callWebService(string $function, array $params = [])
     {
+        // ✅ VERIFICAR RATE LIMIT
+        $this->rateLimiter->attempt();
+
         $url = "{$this->moodleUrl}/webservice/rest/server.php";
 
         $requestParams = array_merge([
@@ -248,10 +264,14 @@ class MoodleService implements MoodleServiceInterface
             $response = Http::timeout($this->timeout)->asForm()->post($url, $requestParams);
             $duration = round((microtime(true) - $start) * 1000, 2);
 
+            // ✅ REGISTRAR LLAMADA EXITOSA
+            $this->rateLimiter->hit();
+
             Log::info('📤 Moodle API llamada', [
                 'function' => $function,
                 'status' => $response->status(),
                 'time_ms' => $duration,
+                'rate_limit_remaining' => $this->rateLimiter->remaining(),
             ]);
 
             if ($response->failed()) {
@@ -273,6 +293,8 @@ class MoodleService implements MoodleServiceInterface
             return $data;
         } catch (ConnectionException $e) {
             throw MoodleServiceException::connectionFailed($e->getMessage());
+        } catch (MoodleServiceException $e) {
+            throw $e; // Re-lanzar excepciones de rate limit
         } catch (\Exception $e) {
             Log::error('💥 Error general en callWebService', [
                 'function' => $function,

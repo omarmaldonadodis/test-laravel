@@ -52,6 +52,16 @@ class MoodleServiceException extends Exception
         );
     }
 
+    public static function rateLimitExceeded(int $maxAttempts, int $retryAfter, array $context = []): self
+    {
+        return new self(
+            "Moodle API rate limit exceeded. Max {$maxAttempts} requests per minute. Retry after {$retryAfter} seconds.",
+            429,
+            null,
+            array_merge(['type' => 'rate_limit_exceeded', 'retry_after' => $retryAfter], $context)
+        );
+    }
+
     public function getContext(): array
     {
         return $this->context;

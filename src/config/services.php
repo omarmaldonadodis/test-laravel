@@ -41,6 +41,12 @@ return [
         'service' => env('MOODLE_SERVICE', 'laravel2'),
         'default_course_id' => env('MOODLE_DEFAULT_COURSE_ID', 2),
         'timeout' => env('MOODLE_TIMEOUT', 30),
+        'cache_ttl' => env('MOODLE_CACHE_TTL', 3600),
+        'rate_limit' => [
+            'enabled' => env('MOODLE_RATE_LIMIT_ENABLED', true),
+            'max_attempts' => env('MOODLE_RATE_LIMIT_MAX_ATTEMPTS', 60), // 60 llamadas
+            'decay_seconds' => env('MOODLE_RATE_LIMIT_DECAY_SECONDS', 60), // por minuto
+        ],
     ],
 
     /*

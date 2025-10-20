@@ -8,31 +8,50 @@ use App\Http\Requests\MedusaWebhookRequest;
 use App\Http\Resources\WebhookResponseResource;
 use App\Http\Resources\ErrorResource;
 use App\Jobs\CreateMoodleUserJob;
+use App\Services\Webhook\WebhookIdempotencyService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 
 class MedusaWebhookController extends Controller
 {
-    /**
-     * Maneja el webhook de Medusa cuando se paga un pedido.
-     * 
-     * Ahora usa FormRequest para validación y API Resources para respuestas
-     */
+    public function __construct(
+        private WebhookIdempotencyService $idempotencyService
+    ) {}
+
     public function handleOrderPaid(MedusaWebhookRequest $request): JsonResponse
     {
         try {
-            Log::info('Webhook recibido desde Medusa', [
-                'payload' => $request->validated(),
-                'ip' => $request->ip(),
+
+            Log::debug('🔍 Payload RAW', [
+                'validated' => $request->validated(),
+                'validatedForDTO' => $request->validatedForDTO(),
+            ]);
+            
+            $orderDTO = MedusaOrderDTO::fromWebhookPayload($request->validatedForDTO());
+            
+            // 🔍 DEBUG: Ver el DTO creado
+            Log::debug('🔍 DTO Creado', [
+                'orderId' => $orderDTO->orderId,
+                'email' => $orderDTO->customerEmail,
+                'isValid' => $orderDTO->isValid(),
+            ]);
+        
+
+            // Generar webhook ID único
+            $webhookId = $request->header('X-Webhook-Id') ?? $orderDTO->orderId ?? uniqid('wh_');
+            $orderId = $orderDTO->orderId;
+            
+            Log::info('📥 Webhook recibido', [
+                'webhook_id' => $webhookId,
+                'order_id' => $orderId,
+                'email' => $orderDTO->customerEmail,
             ]);
 
-            // Crear DTO desde payload validado
-            $orderDTO = MedusaOrderDTO::fromWebhookPayload($request->validatedForDTO());
-
-            // Validar datos mínimos
+            // ✅ VALIDAR DATOS ANTES DE VERIFICAR IDEMPOTENCIA
             if (!$orderDTO->isValid()) {
                 Log::warning('⚠️ Payload inválido del webhook', [
-                    'order_id' => $orderDTO->orderId,
+                    'webhook_id' => $webhookId,
+                    'order_id' => $orderId,
                     'email' => $orderDTO->customerEmail,
                 ]);
                 
@@ -43,18 +62,37 @@ class MedusaWebhookController extends Controller
                 ]))->response();
             }
 
-            // Despachar job a la cola (ASÍNCRONO)
+            // ✅ VERIFICACIÓN DE IDEMPOTENCIA (con el payload completo para guardar)
+            $payload = $request->validated();
+            
+            if (!$this->idempotencyService->checkAndMark($webhookId, $orderId, $payload)) {
+                Log::info('⚠️ Webhook duplicado ignorado', [
+                    'webhook_id' => $webhookId,
+                    'order_id' => $orderId,
+                    'email' => $orderDTO->customerEmail,
+                ]);
+
+                return (new WebhookResponseResource([
+                    'message' => 'Webhook already processed',
+                    'status' => 'duplicate',
+                    'order_id' => $orderId,
+                    'customer_email' => $orderDTO->customerEmail,
+                ]))->response()->setStatusCode(200); // 200 para evitar reintentos
+            }
+
+            // ✅ DESPACHAR JOB (usando el DTO que ya tenemos)
             CreateMoodleUserJob::dispatch($orderDTO);
 
             Log::info('📤 Job despachado a la cola', [
-                'order_id' => $orderDTO->orderId,
+                'webhook_id' => $webhookId,
+                'order_id' => $orderId,
                 'email' => $orderDTO->customerEmail,
             ]);
 
             return (new WebhookResponseResource([
                 'message' => 'Webhook received and queued for processing',
                 'status' => 'queued',
-                'order_id' => $orderDTO->orderId,
+                'order_id' => $orderId,
                 'customer_email' => $orderDTO->customerEmail,
                 'queued_at' => now(),
                 'job_class' => CreateMoodleUserJob::class,
@@ -63,7 +101,9 @@ class MedusaWebhookController extends Controller
         } catch (\Throwable $e) {
             Log::error('❌ Error al procesar webhook', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
 
             return (new ErrorResource([
