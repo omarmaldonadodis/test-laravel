@@ -17,7 +17,7 @@ class EnrollUserInCourseJob implements ShouldQueue
 
     public int $tries = 3;
     public int $timeout = 120;
-    public int $backoff = 60;
+    public array $backoff = [30, 60, 120];
 
     public function __construct(
         public User $user,
@@ -28,38 +28,62 @@ class EnrollUserInCourseJob implements ShouldQueue
     public function handle(MoodleServiceInterface $moodleService): void
     {
         try {
-            // Verificar que el usuario tenga moodle_user_id
+            // Refrescar el usuario desde BD para obtener datos actualizados
+            $this->user->refresh();
+
+            Log::info('📚 Iniciando inscripción', [
+                'user_id' => $this->user->id,
+                'moodle_user_id' => $this->user->moodle_user_id,
+                'course_id' => $this->courseId,
+            ]);
+
+            // Validar que el usuario tenga moodle_user_id
             if (empty($this->user->moodle_user_id)) {
-                throw new \Exception('User does not have a moodle_user_id');
+                throw new \Exception(
+                    "Usuario {$this->user->id} no tiene moodle_user_id. " .
+                    "Posiblemente el CreateMoodleUserJob aún no terminó."
+                );
             }
 
-            Log::info('Starting course enrollment', [
-                'user_id' => $this->user->id,
-                'moodle_user_id' => $this->user->moodle_user_id,
-                'course_id' => $this->courseId,
-                'role_id' => $this->roleId
-            ]);
+            // Verificar si ya está inscrito
+            if ($moodleService->isUserEnrolled((int) $this->user->moodle_user_id, $this->courseId)) {
+                Log::info('ℹ️ Usuario ya inscrito', [
+                    'user_id' => $this->user->id,
+                    'moodle_user_id' => $this->user->moodle_user_id,
+                    'course_id' => $this->courseId,
+                ]);
+                return;
+            }
 
-            $result = $moodleService->enrollUserInCourse(
+            // Inscribir en Moodle
+            $result = $moodleService->enrollUser(
                 (int) $this->user->moodle_user_id,
                 $this->courseId,
-                $this->roleId
+                $this->roleId ?? 5
             );
 
-            Log::info('Course enrollment completed successfully', [
+            Log::info('✅ Inscripción exitosa', [
                 'user_id' => $this->user->id,
                 'moodle_user_id' => $this->user->moodle_user_id,
                 'course_id' => $this->courseId,
-                'result' => $result
+                'result' => $result,
             ]);
-        } catch (\Exception $e) {
-            Log::error('Failed to enroll user in course', [
+
+        } catch (\Throwable $e) {
+            Log::error('❌ Error en inscripción', [
                 'user_id' => $this->user->id,
+                'user_email' => $this->user->email,
                 'moodle_user_id' => $this->user->moodle_user_id ?? null,
                 'course_id' => $this->courseId,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'attempt' => $this->attempts(),
             ]);
+
+            // Si es el último intento, no reintentar
+            if ($this->attempts() >= $this->tries) {
+                $this->fail($e);
+                return;
+            }
 
             throw $e;
         }
@@ -67,14 +91,21 @@ class EnrollUserInCourseJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::critical('EnrollUserInCourseJob failed permanently', [
+        Log::critical('💥 EnrollUserInCourseJob falló permanentemente', [
             'user_id' => $this->user->id,
             'user_email' => $this->user->email,
             'moodle_user_id' => $this->user->moodle_user_id ?? null,
             'course_id' => $this->courseId,
-            'error' => $exception->getMessage()
+            'error' => $exception->getMessage(),
         ]);
+    }
 
-        // TODO: Implement notification system (email, Slack, Discord)
+    public function tags(): array
+    {
+        return [
+            'enrollment',
+            "user:{$this->user->id}",
+            "course:{$this->courseId}",
+        ];
     }
 }

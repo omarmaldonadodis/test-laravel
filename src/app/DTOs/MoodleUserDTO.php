@@ -2,10 +2,6 @@
 
 namespace App\DTOs;
 
-/**
- * DTO para datos de usuario de Moodle
- * Principio: Single Responsibility - Solo maneja datos de usuarios Moodle
- */
 class MoodleUserDTO
 {
     public function __construct(
@@ -18,9 +14,6 @@ class MoodleUserDTO
         public readonly bool $existing = false
     ) {}
 
-    /**
-     * Crea desde MedusaOrderDTO
-     */
     public static function fromMedusaOrder(MedusaOrderDTO $order, string $username, string $password): self
     {
         return new self(
@@ -32,9 +25,6 @@ class MoodleUserDTO
         );
     }
 
-    /**
-     * Crea desde respuesta de Moodle
-     */
     public static function fromMoodleResponse(array $data): self
     {
         return new self(
@@ -42,15 +32,12 @@ class MoodleUserDTO
             firstname: $data['firstname'] ?? '',
             lastname: $data['lastname'] ?? '',
             username: $data['username'],
-            password: '', // No se devuelve en respuestas
+            password: '',
             id: $data['id'],
             existing: $data['existing'] ?? false
         );
     }
 
-    /**
-     * Convierte a formato para crear usuario en Moodle
-     */
     public function toMoodleCreateFormat(): array
     {
         return [
@@ -62,12 +49,29 @@ class MoodleUserDTO
         ];
     }
 
+    public function getFullName(): string
+    {
+        return trim($this->firstname . ' ' . $this->lastname);
+    }
+
+    public function isValid(): bool
+    {
+        return !empty($this->email) 
+            && filter_var($this->email, FILTER_VALIDATE_EMAIL)
+            && !empty($this->firstname)
+            && !empty($this->lastname)
+            && !empty($this->username);
+    }
+
     public function toArray(): array
     {
         return [
             'id' => $this->id,
             'email' => $this->email,
             'username' => $this->username,
+            'firstname' => $this->firstname,
+            'lastname' => $this->lastname,
+            'full_name' => $this->getFullName(),
             'existing' => $this->existing,
         ];
     }

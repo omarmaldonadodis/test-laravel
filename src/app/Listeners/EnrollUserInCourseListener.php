@@ -8,67 +8,62 @@ use App\Models\User;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 
-
 class EnrollUserInCourseListener implements ShouldQueue
 {
     public function handle(MoodleUserCreated $event): void
     {
-        // Logging completo del evento
-        Log::info('🎧 Listener: Payload completo recibido', [
-            'user' => $event->user ? $event->user->toArray() : null,
-            'order' => $event->order ? $event->order->toArray() : null,
-        ]);
-
-        // Convertir DTO a modelo User
-        $userDto = $event->user;
-        if (!$userDto || empty($userDto->email)) {
-            Log::error('❌ Usuario inválido, no se puede despachar job de inscripción', [
-                'user' => $userDto ? $userDto->toArray() : null,
+        try {
+            Log::info('🎧 Listener iniciado', [
+                'user_email' => $event->user->email,
+                'order_id' => $event->order->orderId,
             ]);
-            return;
-        }
 
-        $user = User::updateOrCreate(
-            ['email' => $userDto->email],
-            [
-                'name' => $userDto->fullName ?? ($userDto->firstName . ' ' . $userDto->lastName),
-                'moodle_user_id' => $userDto->id,
-                'medusa_order_id' => $event->order->orderId ?? null,
-            ]
-        );
+            if (!$event->user || !$event->user->id) {
+                Log::error('❌ Usuario inválido');
+                return;
+            }
 
-        // Obtener cursos desde la orden
-        $courseIds = [];
-        if (method_exists($event->order, 'getCourseIds')) {
-            $courseIds = $event->order->getCourseIds() ?? [];
-        }
+            $user = User::updateOrCreate(
+                ['email' => $event->user->email],
+                [
+                    'name' => $event->user->getFullName(),
+                    'moodle_user_id' => $event->user->id,
+                    'medusa_order_id' => $event->order->orderId,
+                    'moodle_processed_at' => now(),
+                    'password' => bcrypt(str()->random(32)),
+                ]
+            );
 
-        // Si no hay cursos, usar el curso por defecto
-        if (empty($courseIds)) {
-            $defaultCourseId = config('services.moodle.default_course_id', 2);
-            $courseIds = [$defaultCourseId];
+            Log::info('✅ Usuario guardado', ['user_id' => $user->id]);
 
-            Log::warning('⚠️ No se encontraron cursos en items, usando curso por defecto', [
-                'default_course_id' => $defaultCourseId,
+            $courseIds = $event->order->getCourseIds();
+            if (empty($courseIds)) {
+                $courseIds = [(int) config('services.moodle.default_course_id', 2)];
+            }
+
+            foreach ($courseIds as $courseId) {
+                EnrollUserInCourseJob::dispatch($user, (int) $courseId)
+                    ->delay(now()->addSeconds(10));
+                
+                Log::info('📤 Job despachado', [
+                    'user_id' => $user->id,
+                    'course_id' => $courseId,
+                ]);
+            }
+
+        } catch (\Throwable $e) {
+            Log::error('💥 Error en listener', [
+                'error' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile(),
             ]);
-        }
-
-        // Despachar job para cada curso
-        foreach ($courseIds as $courseId) {
-            EnrollUserInCourseJob::dispatch($user, (int) $courseId)
-                ->delay(now()->addSeconds(5));
-
-            Log::info('📤 Job de inscripción despachado', [
-                'user_id' => $user->id,
-                'course_id' => $courseId,
-            ]);
+            throw $e;
         }
     }
 
     public function failed(MoodleUserCreated $event, \Throwable $exception): void
     {
-        Log::error('💥 Listener EnrollUserInCourseListener falló', [
-            'user_id' => $event->user->id ?? null,
+        Log::critical('💥 Listener falló', [
             'error' => $exception->getMessage(),
         ]);
     }
