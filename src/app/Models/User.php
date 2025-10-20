@@ -21,6 +21,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'moodle_user_id',      
+        'medusa_order_id',    
+        'moodle_processed_at',
     ];
 
     /**
