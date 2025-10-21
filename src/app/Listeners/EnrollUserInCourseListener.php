@@ -7,6 +7,7 @@ use App\Jobs\EnrollUserInCourseJob;
 use App\Models\User;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
+use App\Constants\MoodleRoles;
 
 class EnrollUserInCourseListener implements ShouldQueue
 {
@@ -40,16 +41,17 @@ class EnrollUserInCourseListener implements ShouldQueue
             if (empty($courseIds)) {
                 $courseIds = [(int) config('services.moodle.default_course_id', 2)];
             }
-
             foreach ($courseIds as $courseId) {
-                EnrollUserInCourseJob::dispatch($user, (int) $courseId)
+                EnrollUserInCourseJob::dispatch($user, (int) $courseId, MoodleRoles::STUDENT)
                     ->delay(now()->addSeconds(10));
                 
                 Log::info('📤 Job despachado', [
                     'user_id' => $user->id,
                     'course_id' => $courseId,
+                    'role' => MoodleRoles::getName(MoodleRoles::STUDENT),
                 ]);
             }
+
 
         } catch (\Throwable $e) {
             Log::error('💥 Error en listener', [

@@ -26,7 +26,7 @@ class MedusaOrderDTO
     public static function fromWebhookPayload(array $payload): self
     {
         return new self(
-            orderId: Arr::get($payload, 'id', 'unknown'),
+            orderId: Arr::get($payload, 'order_id', 'unknown'),
             customerEmail: Arr::get($payload, 'customer.email', ''),
             customerFirstName: Arr::get($payload, 'customer.first_name', 'Usuario'),
             customerLastName: Arr::get($payload, 'customer.last_name', 'Medusa'),

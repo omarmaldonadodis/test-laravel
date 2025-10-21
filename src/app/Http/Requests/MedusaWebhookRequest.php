@@ -16,8 +16,8 @@ class MedusaWebhookRequest extends FormRequest
 
     public function rules(): array
     {
-            return [
-        'id' => 'nullable|string',
+        return [
+        'order_id' => 'nullable|string',
         'type' => 'nullable|string',
         'customer' => 'required|array',
         'customer.email' => 'required|email',

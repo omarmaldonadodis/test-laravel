@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Http\Client\ConnectionException;
+use App\Constants\MoodleRoles;
 
 class MoodleService implements MoodleServiceInterface
 {
@@ -24,7 +25,7 @@ class MoodleService implements MoodleServiceInterface
     ) {
         $this->moodleUrl = rtrim(config('services.moodle.url'), '/');
         $this->token = config('services.moodle.token');
-        $this->timeout = config('services.moodle.timeout', 30); // ✅ Ahora configurable
+        $this->timeout = config('services.moodle.timeout', 30); 
         $this->rateLimiter = $rateLimiter;
 
         if (empty($this->token)) {
@@ -143,9 +144,15 @@ class MoodleService implements MoodleServiceInterface
     }
 
     /** Inscribe usuario en curso */
-    public function enrollUser(int $userId, int $courseId, int $roleId = 5): bool
+    public function enrollUser(int $userId, int $courseId, int $roleId = MoodleRoles::STUDENT): bool
     {
         try {
+            if (!MoodleRoles::isValid($roleId)) {
+                throw new \InvalidArgumentException(
+                    "Invalid role ID: {$roleId}. Must be a valid Moodle role."
+                );
+            }
+
             $enrolments = [[
                 'roleid' => $roleId,
                 'userid' => $userId,

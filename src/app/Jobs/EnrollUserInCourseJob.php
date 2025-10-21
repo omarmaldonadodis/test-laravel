@@ -10,6 +10,8 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use App\Constants\MoodleRoles;
+
 
 class EnrollUserInCourseJob implements ShouldQueue
 {
@@ -23,7 +25,9 @@ class EnrollUserInCourseJob implements ShouldQueue
         public User $user,
         public int $courseId,
         public ?int $roleId = null
-    ) {}
+    ) {
+        $this->roleId = $roleId ?? MoodleRoles::STUDENT;
+    }
 
     public function handle(MoodleServiceInterface $moodleService): void
     {

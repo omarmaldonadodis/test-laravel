@@ -1,0 +1,340 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Laravel Webhooks API",
+        "description": "API para integración de webhooks entre Medusa y Moodle",
+        "contact": {
+            "email": "support@example.com"
+        },
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8080",
+            "description": "Development Server"
+        },
+        {
+            "url": "https://api.production.com",
+            "description": "Production Server"
+        }
+    ],
+    "paths": {
+        "/api/webhooks/medusa/order-paid": {
+            "post": {
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "Procesa webhook de orden pagada desde Medusa",
+                "description": "Recibe webhook cuando se completa el pago de una orden en Medusa y crea/inscribe usuario en Moodle",
+                "operationId": "handleOrderPaid",
+                "requestBody": {
+                    "description": "Payload del webhook de Medusa",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "customer",
+                                    "items"
+                                ],
+                                "properties": {
+                                    "id": {
+                                        "description": "ID de la orden (opcional)",
+                                        "type": "string",
+                                        "example": "order_01HXYZ123"
+                                    },
+                                    "customer": {
+                                        "required": [
+                                            "email",
+                                            "first_name",
+                                            "last_name",
+                                            "id"
+                                        ],
+                                        "properties": {
+                                            "email": {
+                                                "type": "string",
+                                                "format": "email",
+                                                "example": "customer@example.com"
+                                            },
+                                            "first_name": {
+                                                "type": "string",
+                                                "example": "John"
+                                            },
+                                            "last_name": {
+                                                "type": "string",
+                                                "example": "Doe"
+                                            },
+                                            "id": {
+                                                "type": "string",
+                                                "example": "cus_01HXYZ123"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "items": {
+                                        "type": "array",
+                                        "items": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "string",
+                                                    "example": "item_01HXYZ123"
+                                                },
+                                                "title": {
+                                                    "type": "string",
+                                                    "example": "Curso de Laravel"
+                                                },
+                                                "product_id": {
+                                                    "type": "string",
+                                                    "example": "prod_01HXYZ123"
+                                                },
+                                                "variant_id": {
+                                                    "type": "string",
+                                                    "example": "variant_01HXYZ123"
+                                                },
+                                                "quantity": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "unit_price": {
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "example": 49.99
+                                                },
+                                                "total": {
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "example": 49.99
+                                                },
+                                                "metadata": {
+                                                    "properties": {
+                                                        "moodle_course_id": {
+                                                            "type": "integer",
+                                                            "example": 2
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "metadata": {
+                                        "type": "object",
+                                        "example": {
+                                            "custom_field": "value"
+                                        }
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "202": {
+                        "description": "Webhook recibido y procesado exitosamente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Webhook received and queued for processing"
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "queued"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "order_id": {
+                                                    "type": "string",
+                                                    "example": "order_01HXYZ123"
+                                                },
+                                                "customer_email": {
+                                                    "type": "string",
+                                                    "example": "customer@example.com"
+                                                },
+                                                "queued_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "example": "2025-10-21T10:30:00Z"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "200": {
+                        "description": "Webhook duplicado (ya procesado)",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Webhook already processed"
+                                        },
+                                        "status": {
+                                            "type": "string",
+                                            "example": "duplicate"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "order_id": {
+                                                    "type": "string"
+                                                },
+                                                "customer_email": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Payload inválido",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "properties": {
+                                                "message": {
+                                                    "type": "string",
+                                                    "example": "Invalid webhook payload"
+                                                },
+                                                "code": {
+                                                    "type": "string",
+                                                    "example": "INVALID_PAYLOAD"
+                                                },
+                                                "status": {
+                                                    "type": "integer",
+                                                    "example": 400
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Firma del webhook inválida",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Invalid signature"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Error interno del servidor",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "properties": {
+                                                "message": {
+                                                    "type": "string",
+                                                    "example": "Error processing webhook"
+                                                },
+                                                "code": {
+                                                    "type": "string",
+                                                    "example": "WEBHOOK_ERROR"
+                                                },
+                                                "status": {
+                                                    "type": "integer",
+                                                    "example": 500
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "webhook_signature": []
+                    }
+                ]
+            }
+        },
+        "/api/webhooks/medusa/health": {
+            "get": {
+                "tags": [
+                    "Health"
+                ],
+                "summary": "Verifica el estado del servicio de webhooks",
+                "operationId": "healthCheck",
+                "responses": {
+                    "200": {
+                        "description": "Servicio funcionando correctamente",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "ok"
+                                        },
+                                        "service": {
+                                            "type": "string",
+                                            "example": "webhook-handler"
+                                        },
+                                        "timestamp": {
+                                            "type": "string",
+                                            "format": "date-time"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "securitySchemes": {
+            "webhook_signature": {
+                "type": "apiKey",
+                "name": "X-Medusa-Signature",
+                "in": "header"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Webhooks",
+            "description": "Webhooks"
+        },
+        {
+            "name": "Health",
+            "description": "Health"
+        }
+    ]
+}
