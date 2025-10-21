@@ -19,8 +19,7 @@ class MedusaWebhookTest extends TestCase
         config(['services.medusa.medusa_webhook_secret' => 'test-secret']);
     }
 
-    /** @test */
-    public function it_processes_valid_webhook_successfully()
+    public function test_it_processes_valid_webhook_successfully()
     {
         Queue::fake();
 
@@ -62,8 +61,8 @@ class MedusaWebhookTest extends TestCase
         Queue::assertPushed(CreateMoodleUserJob::class);
     }
 
-    /** @test */
-    public function it_rejects_webhook_with_invalid_signature()
+   
+    public function test_it_rejects_webhook_with_invalid_signature()
     {
         $payload = [
             'id' => 'order_test_456',
@@ -84,8 +83,8 @@ class MedusaWebhookTest extends TestCase
         $response->assertJsonFragment(['error' => 'Invalid signature']);
     }
 
-    /** @test */
-    public function it_rejects_duplicate_webhook()
+  
+    public function test_it_rejects_duplicate_webhook()
     {
         Queue::fake();
 
@@ -124,17 +123,17 @@ class MedusaWebhookTest extends TestCase
         Queue::assertNotPushed(CreateMoodleUserJob::class);
         }
 
-        /** @test */
-public function it_validates_required_customer_fields()
-{
-    $payload = [
-        'id' => 'order_invalid_123',
-        'customer' => [
-            'id' => 'cus_123',
-            // Falta email, first_name, last_name
-        ],
-        'items' => [['id' => 'item_123']],
-    ];
+       
+    public function test_it_validates_required_customer_fields()
+    {
+        $payload = [
+            'id' => 'order_invalid_123',
+            'customer' => [
+                'id' => 'cus_123',
+                // Falta email, first_name, last_name
+            ],
+            'items' => [['id' => 'item_123']],
+        ];
 
     $signature = hash_hmac('sha256', json_encode($payload), 'test-secret');
 
@@ -146,8 +145,8 @@ public function it_validates_required_customer_fields()
     $response->assertJsonValidationErrors(['customer.email', 'customer.first_name', 'customer.last_name']);
 }
 
-/** @test */
-public function it_validates_invalid_email_format()
+
+public function test_it_validates_invalid_email_format()
 {
     $payload = [
         'id' => 'order_invalid_email_123',
@@ -170,8 +169,8 @@ public function it_validates_invalid_email_format()
     $response->assertJsonValidationErrors(['customer.email']);
 }
 
-/** @test */
-public function it_requires_at_least_one_item()
+
+public function test_it_requires_at_least_one_item()
 {
     $payload = [
         'id' => 'order_no_items_123',
@@ -194,8 +193,8 @@ public function it_requires_at_least_one_item()
     $response->assertJsonValidationErrors(['items']);
 }
 
-/** @test */
-public function it_handles_webhook_without_order_id()
+
+public function test_it_handles_webhook_without_order_id()
 {
     Queue::fake();
 
@@ -233,8 +232,8 @@ public function it_handles_webhook_without_order_id()
     $this->assertStringContainsString('ord_', $responseData['order_id']);
 }
 
-/** @test */
-public function health_check_returns_ok_status()
+
+public function test_health_check_returns_ok_status()
 {
     $response = $this->getJson('/api/webhooks/medusa/health');
 
@@ -247,8 +246,8 @@ public function health_check_returns_ok_status()
     $response->assertJsonFragment(['status' => 'ok']);
 }
 
-/** @test */
-public function it_logs_webhook_processing()
+
+public function test_it_logs_webhook_processing()
 {
     Queue::fake();
     \Log::spy();

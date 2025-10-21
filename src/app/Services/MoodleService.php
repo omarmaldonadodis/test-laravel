@@ -5,12 +5,15 @@ namespace App\Services;
 use App\Contracts\MoodleServiceInterface;
 use App\Exceptions\MoodleServiceException;
 use App\Services\RateLimiting\MoodleRateLimiter;
+use App\Constants\MoodleRoles;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Http\Client\ConnectionException;
-use App\Constants\MoodleRoles;
+use Illuminate\Support\Collection;
+use InvalidArgumentException;
+use Exception;
 
 class MoodleService implements MoodleServiceInterface
 {
@@ -252,7 +255,7 @@ class MoodleService implements MoodleServiceInterface
             return $info;
         } catch (\Exception $e) {
             Log::error('❌ Error verificando token', ['error' => $e->getMessage()]);
-            return null;
+            throw $e;
         }
     }
 
@@ -271,7 +274,7 @@ class MoodleService implements MoodleServiceInterface
         }
     }
 
-     /**
+    /**
      * Llamada genérica al API Moodle con rate limiting
      */
     private function callWebService(string $function, array $params = [])
@@ -299,6 +302,7 @@ class MoodleService implements MoodleServiceInterface
                 'rate_limit_remaining' => $this->rateLimiter->remaining(),
             ]);
 
+            // ✅ Validar HTTP status
             if ($response->failed()) {
                 throw MoodleServiceException::connectionFailed(
                     "HTTP Error {$response->status()}",
@@ -308,31 +312,54 @@ class MoodleService implements MoodleServiceInterface
 
             $body = $response->body();
             
-            // ✅ Manejar respuesta vacía (válida para algunas funciones como enrollment)
+            // ✅ Manejar respuesta vacía (válida para enrollment)
             if (empty($body)) {
-                return []; // Respuesta vacía válida
+                return [];
             }
 
             $data = $response->json();
             
-            // ✅ Si json() retorna null, la respuesta no es JSON válido
-            if ($data === null) {
-                throw new \Exception('Invalid JSON response from Moodle');
+            // ✅ Validar JSON válido
+            if ($data === null && json_last_error() !== JSON_ERROR_NONE) {
+                throw new \Exception('Invalid JSON response from Moodle: ' . json_last_error_msg());
             }
 
-            if (isset($data['exception'])) {
-                throw new \Exception("Moodle Error [{$data['errorcode']}]: {$data['message']}");
+            // ✅ VALIDACIÓN COMPLETA: Verificar si es un error de Moodle
+            if (is_array($data) && isset($data['exception'])) {
+                $errorCode = $data['errorcode'] ?? 'unknown';
+                $message = $data['message'] ?? 'Unknown Moodle error';
+                
+                Log::error('❌ Moodle API error', [
+                    'function' => $function,
+                    'error_code' => $errorCode,
+                    'message' => $message,
+                ]);
+                
+                throw new \Exception("Moodle Error [{$errorCode}]: {$message}");
+            }
+
+            // ✅ Validar que la respuesta sea un array (estructura esperada)
+            if (!is_array($data)) {
+                throw new \Exception('Unexpected response format from Moodle');
             }
 
             return $data;
+            
         } catch (ConnectionException $e) {
+            Log::error('💥 Connection error to Moodle', [
+                'function' => $function,
+                'error' => $e->getMessage(),
+            ]);
             throw MoodleServiceException::connectionFailed($e->getMessage());
+            
         } catch (MoodleServiceException $e) {
-            throw $e; // Re-lanzar excepciones de rate limit y connection
+            throw $e; // Re-lanzar excepciones específicas
+            
         } catch (\Exception $e) {
             Log::error('💥 Error general en callWebService', [
                 'function' => $function,
                 'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
             throw $e;
         }

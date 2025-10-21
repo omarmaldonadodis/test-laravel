@@ -7,8 +7,7 @@ use Tests\TestCase;
 
 class MedusaOrderDTOTest extends TestCase
 {
-    /** @test */
-    public function it_creates_dto_from_webhook_payload_with_order_id()
+    public function test_it_creates_dto_from_webhook_payload_with_order_id()
     {
         $payload = [
             'id' => 'order_123',
@@ -39,8 +38,8 @@ class MedusaOrderDTOTest extends TestCase
         $this->assertEquals(['custom' => 'value'], $dto->metadata);
     }
 
-    /** @test */
-    public function it_generates_order_id_from_customer_id_when_missing()
+
+    public function test_it_generates_order_id_from_customer_id_when_missing()
     {
         $payload = [
             // Sin 'id' de orden
@@ -59,8 +58,8 @@ class MedusaOrderDTOTest extends TestCase
         $this->assertStringContainsString('ord_cus_456', $dto->orderId);
     }
 
-    /** @test */
-    public function it_generates_unique_order_id_when_no_identifiers()
+
+    public function test_it_generates_unique_order_id_when_no_identifiers()
     {
         $payload = [
             'customer' => [
@@ -77,8 +76,7 @@ class MedusaOrderDTOTest extends TestCase
         $this->assertStringStartsWith('ord_', $dto->orderId);
     }
 
-    /** @test */
-    public function it_validates_dto_with_valid_email()
+    public function test_it_validates_dto_with_valid_email()
     {
         $payload = [
             'id' => 'order_valid',
@@ -96,8 +94,8 @@ class MedusaOrderDTOTest extends TestCase
         $this->assertTrue($dto->isValid());
     }
 
-    /** @test */
-    public function it_invalidates_dto_with_invalid_email()
+
+    public function test_it_invalidates_dto_with_invalid_email()
     {
         $payload = [
             'id' => 'order_invalid',
@@ -115,8 +113,8 @@ class MedusaOrderDTOTest extends TestCase
         $this->assertFalse($dto->isValid());
     }
 
-    /** @test */
-    public function it_invalidates_dto_with_empty_email()
+
+    public function test_it_invalidates_dto_with_empty_email()
     {
         $payload = [
             'id' => 'order_empty_email',
@@ -134,8 +132,7 @@ class MedusaOrderDTOTest extends TestCase
         $this->assertFalse($dto->isValid());
     }
 
-    /** @test */
-    public function it_invalidates_dto_with_unknown_order_id()
+    public function test_it_invalidates_dto_with_unknown_order_id()
     {
         $payload = [
             'customer' => [
@@ -157,8 +154,8 @@ class MedusaOrderDTOTest extends TestCase
         $this->assertFalse($dto->isValid());
     }
 
-    /** @test */
-    public function it_extracts_course_ids_from_items()
+
+    public function test_it_extracts_course_ids_from_items()
     {
         $payload = [
             'id' => 'order_courses',
@@ -184,8 +181,8 @@ class MedusaOrderDTOTest extends TestCase
         $this->assertContains(3, $courseIds);
     }
 
-    /** @test */
-    public function it_returns_empty_array_when_no_course_ids()
+
+    public function test_it_returns_empty_array_when_no_course_ids()
     {
         $payload = [
             'id' => 'order_no_courses',
@@ -208,8 +205,7 @@ class MedusaOrderDTOTest extends TestCase
         $this->assertEmpty($courseIds);
     }
 
-    /** @test */
-    public function it_converts_dto_to_array()
+    public function test_it_converts_dto_to_array()
     {
         $dto = new MedusaOrderDTO(
             orderId: 'order_123',
@@ -230,8 +226,7 @@ class MedusaOrderDTOTest extends TestCase
         $this->assertEquals(2, $array['items_count']);
     }
 
-    /** @test */
-    public function it_gets_full_name()
+    public function test_it_gets_full_name()
     {
         $dto = new MedusaOrderDTO(
             orderId: 'order_123',
@@ -246,8 +241,7 @@ class MedusaOrderDTOTest extends TestCase
         $this->assertEquals('María José García López', $fullName);
     }
 
-    /** @test */
-    public function it_trims_full_name()
+    public function test_it_trims_full_name()
     {
         $dto = new MedusaOrderDTO(
             orderId: 'order_123',

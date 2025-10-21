@@ -20,8 +20,7 @@ class WebhookIdempotencyServiceTest extends TestCase
         $this->service = new WebhookIdempotencyService();
     }
 
-    /** @test */
-    public function it_allows_new_webhook_to_be_processed()
+    public function test_it_allows_new_webhook_to_be_processed()
     {
         $result = $this->service->canProcessWebhook(
             'wh_new_123',
@@ -33,8 +32,7 @@ class WebhookIdempotencyServiceTest extends TestCase
         $this->assertEquals('new_webhook', $result['reason']);
     }
 
-    /** @test */
-    public function it_rejects_duplicate_webhook_id()
+    public function test_it_rejects_duplicate_webhook_id()
     {
         ProcessedWebhook::create([
             'webhook_id' => 'wh_duplicate',
@@ -55,8 +53,7 @@ class WebhookIdempotencyServiceTest extends TestCase
         $this->assertEquals('duplicate_webhook', $result['reason']);
     }
 
-    /** @test */
-    public function it_rejects_duplicate_order_id()
+    public function test_it_rejects_duplicate_order_id()
     {
         ProcessedWebhook::create([
             'webhook_id' => 'wh_123',
@@ -77,8 +74,7 @@ class WebhookIdempotencyServiceTest extends TestCase
         $this->assertEquals('duplicate_order', $result['reason']);
     }
 
-    /** @test */
-    public function it_detects_existing_moodle_user()
+    public function test_it_detects_existing_moodle_user()
     {
         $user = User::factory()->create([
             'email' => 'existing@example.com',
@@ -97,8 +93,7 @@ class WebhookIdempotencyServiceTest extends TestCase
         $this->assertEquals(999, $result['user']->moodle_user_id);
     }
 
-    /** @test */
-    public function it_marks_webhook_as_processed()
+    public function test_it_marks_webhook_as_processed()
     {
         $this->service->markWebhookAsProcessed(
             'wh_mark_test',
@@ -114,8 +109,7 @@ class WebhookIdempotencyServiceTest extends TestCase
         ]);
     }
 
-    /** @test */
-    public function it_checks_and_marks_in_atomic_transaction()
+    public function test_it_checks_and_marks_in_atomic_transaction()
     {
         $payload = ['test' => 'data'];
 
@@ -132,8 +126,7 @@ class WebhookIdempotencyServiceTest extends TestCase
         ]);
     }
 
-    /** @test */
-    public function it_prevents_duplicate_processing_in_check_and_mark()
+    public function test_it_prevents_duplicate_processing_in_check_and_mark()
     {
         $payload = ['test' => 'data'];
 
@@ -147,8 +140,7 @@ class WebhookIdempotencyServiceTest extends TestCase
         $this->assertFalse($result2);
     }
 
-    /** @test */
-    public function it_links_order_to_existing_user()
+    public function test_it_links_order_to_existing_user()
     {
         $user = User::factory()->create([
             'email' => 'link@example.com',
@@ -163,8 +155,7 @@ class WebhookIdempotencyServiceTest extends TestCase
         $this->assertNotNull($user->moodle_processed_at);
     }
 
-    /** @test */
-    public function it_handles_race_condition_with_atomic_operations()
+    public function test_it_handles_race_condition_with_atomic_operations()
     {
         $payload = ['test' => 'race'];
 

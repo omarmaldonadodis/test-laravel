@@ -20,8 +20,7 @@ class VerifyWebhookSignatureTest extends TestCase
         $this->middleware = new VerifyWebhookSignature();
     }
 
-    /** @test */
-    public function it_allows_request_with_valid_signature()
+    public function test_it_allows_request_with_valid_signature()
     {
         $payload = json_encode(['test' => 'data']);
         $validSignature = hash_hmac('sha256', $payload, $this->secret);
@@ -35,8 +34,7 @@ class VerifyWebhookSignatureTest extends TestCase
         $this->assertEquals('OK', $response->getContent());
     }
 
-    /** @test */
-    public function it_rejects_request_with_invalid_signature()
+    public function test_it_rejects_request_with_invalid_signature()
     {
         $payload = json_encode(['test' => 'data']);
         $invalidSignature = 'invalid-signature';
@@ -50,8 +48,7 @@ class VerifyWebhookSignatureTest extends TestCase
         $this->assertStringContainsString('Invalid signature', $response->getContent());
     }
 
-    /** @test */
-    public function it_rejects_request_without_signature_header()
+    public function test_it_rejects_request_without_signature_header()
     {
         $payload = json_encode(['test' => 'data']);
 
@@ -64,8 +61,7 @@ class VerifyWebhookSignatureTest extends TestCase
         $this->assertStringContainsString('Unauthorized', $response->getContent());
     }
 
-    /** @test */
-    public function it_rejects_request_without_secret_configured()
+    public function test_it_rejects_request_without_secret_configured()
     {
         config(['services.medusa.medusa_webhook_secret' => '']);
         
@@ -78,8 +74,7 @@ class VerifyWebhookSignatureTest extends TestCase
         $this->assertEquals(401, $response->getStatusCode());
     }
 
-    /** @test */
-    public function it_does_not_log_sensitive_data_in_production()
+    public function test_it_does_not_log_sensitive_data_in_production()
     {
         app()->detectEnvironment(fn() => 'production');
         
@@ -99,8 +94,7 @@ class VerifyWebhookSignatureTest extends TestCase
         $this->middleware->handle($request, fn() => response('OK'));
     }
 
-    /** @test */
-    public function it_verifies_signature_with_special_characters_in_payload()
+    public function test_it_verifies_signature_with_special_characters_in_payload()
     {
         $payload = json_encode([
             'customer' => [

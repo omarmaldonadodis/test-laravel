@@ -26,8 +26,7 @@ class MoodleRateLimiterTest extends TestCase
         $this->limiter = new MoodleRateLimiter();
     }
 
-    /** @test */
-    public function it_allows_requests_under_limit()
+    public function test_it_allows_requests_under_limit()
     {
         for ($i = 0; $i < 5; $i++) {
             $this->assertTrue($this->limiter->attempt());
@@ -37,8 +36,7 @@ class MoodleRateLimiterTest extends TestCase
         $this->assertEquals(0, $this->limiter->remaining());
     }
 
-    /** @test */
-    public function it_throws_exception_when_limit_exceeded()
+    public function test_it_throws_exception_when_limit_exceeded()
     {
         // Hacer 5 llamadas (el máximo)
         for ($i = 0; $i < 5; $i++) {
@@ -53,8 +51,7 @@ class MoodleRateLimiterTest extends TestCase
         $this->limiter->attempt();
     }
 
-    /** @test */
-    public function it_tracks_remaining_attempts()
+    public function test_it_tracks_remaining_attempts()
     {
         $this->assertEquals(5, $this->limiter->remaining('test1'));
 
@@ -69,8 +66,7 @@ class MoodleRateLimiterTest extends TestCase
         $this->assertEquals(3, $this->limiter->remaining('test1'));
     }
 
-    /** @test */
-    public function it_uses_different_counters_per_identifier()
+    public function test_it_uses_different_counters_per_identifier()
     {
         $this->limiter->attempt('user1');
         $this->limiter->hit('user1');
@@ -82,8 +78,7 @@ class MoodleRateLimiterTest extends TestCase
         $this->assertEquals(4, $this->limiter->remaining('user2'));
     }
 
-    /** @test */
-    public function it_resets_counter()
+    public function test_it_resets_counter()
     {
         for ($i = 0; $i < 3; $i++) {
             $this->limiter->attempt('reset_test');
@@ -97,8 +92,7 @@ class MoodleRateLimiterTest extends TestCase
         $this->assertEquals(5, $this->limiter->remaining('reset_test'));
     }
 
-    /** @test */
-    public function it_allows_unlimited_requests_when_disabled()
+    public function test_it_allows_unlimited_requests_when_disabled()
     {
         config(['services.moodle.rate_limit.enabled' => false]);
         $limiter = new MoodleRateLimiter();
@@ -112,8 +106,7 @@ class MoodleRateLimiterTest extends TestCase
         $this->assertEquals(PHP_INT_MAX, $limiter->remaining());
     }
 
-    /** @test */
-    public function it_expires_counter_after_decay_seconds()
+    public function test_it_expires_counter_after_decay_seconds()
     {
         config(['services.moodle.rate_limit.decay_seconds' => 1]);
         $limiter = new MoodleRateLimiter();

@@ -23,8 +23,8 @@ class MoodleRateLimiterTest extends TestCase
         Cache::flush();
     }
 
-    /** @test */
-    public function it_allows_requests_until_limit_is_reached()
+   
+    public function test_it_allows_requests_until_limit_is_reached()
     {
         $limiter = new MoodleRateLimiter();
 
@@ -36,8 +36,7 @@ class MoodleRateLimiterTest extends TestCase
         $this->assertEquals(0, $limiter->remaining('test'));
     }
 
-    /** @test */
-    public function it_throws_exception_after_limit()
+    public function test_it_throws_exception_after_limit()
     {
         $limiter = new MoodleRateLimiter();
 

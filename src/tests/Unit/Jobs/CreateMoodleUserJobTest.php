@@ -23,8 +23,7 @@ class CreateMoodleUserJobTest extends TestCase
         parent::tearDown();
     }
 
-    /** @test */
-    public function it_creates_moodle_user_and_fires_event()
+    public function test_it_creates_moodle_user_and_fires_event()
     {
         Event::fake();
         
@@ -65,8 +64,7 @@ class CreateMoodleUserJobTest extends TestCase
         Event::assertDispatched(MoodleUserCreated::class);
     }
 
-    /** @test */
-    public function it_handles_invalid_order_data()
+    public function test_it_handles_invalid_order_data()
     {
         $orderDTO = new MedusaOrderDTO(
             orderId: 'order_456',
@@ -85,8 +83,7 @@ class CreateMoodleUserJobTest extends TestCase
         $job->handle($mockService);
     }
 
-    /** @test */
-    public function it_retries_on_failure()
+    public function test_it_retries_on_failure()
     {
         $job = new CreateMoodleUserJob(
             new MedusaOrderDTO(
@@ -102,8 +99,7 @@ class CreateMoodleUserJobTest extends TestCase
         $this->assertEquals([60, 300, 900], $job->backoff);
     }
 
-    /** @test */
-    public function it_has_correct_tags_for_horizon()
+    public function test_it_has_correct_tags_for_horizon()
     {
         $orderDTO = new MedusaOrderDTO(
             orderId: 'order_tags_test',
@@ -122,8 +118,7 @@ class CreateMoodleUserJobTest extends TestCase
         $this->assertContains('email:tags@example.com', $tags);
     }
 
-    /** @test */
-    public function it_calls_failed_method_on_final_failure()
+    public function test_it_calls_failed_method_on_final_failure()
     {
         Event::fake();
         

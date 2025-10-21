@@ -22,15 +22,12 @@ class MoodleServiceException extends Exception
         $this->context = $context;
     }
 
-    public static function connectionFailed(string $reason, array $context = []): self
+    public static function connectionFailed(string $details = '', array $context = []): self
     {
-        return new self(
-            "Failed to connect to Moodle: {$reason}",
-            500,
-            null,
-            array_merge(['type' => 'connection_error'], $context)
-        );
+        $message = 'Failed to connect to Moodle' . ($details ? ": {$details}" : '');
+        return new self($message, 0, null, $context);
     }
+
 
     public static function userCreationFailed(string $email, string $reason, array $context = []): self
     {

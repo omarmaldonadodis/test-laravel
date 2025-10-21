@@ -20,14 +20,12 @@ class MoodleServiceTest extends TestCase
         parent::setUp();
         
         config(['services.moodle' => [
-            'url' => 'http://moodle-test.local',
-            'token' => 'test-token',
-            'timeout' => 30,
-            'cache_ttl' => 3600,
+            'url' => env('MOODLE_URL'),
+            'token' => env('MOODLE_TOKEN'),
+            'timeout' => env('MOODLE_TIMEOUT', 30),
+            'cache_ttl' => env('MOODLE_CACHE_TTL', 3600),
             'rate_limit' => [
-                'enabled' => false, // Deshabilitar para tests
-                'max_attempts' => 60,
-                'decay_seconds' => 60,
+                'enabled' => env('MOODLE_RATE_LIMIT_ENABLED', false),
             ],
         ]]);
 
@@ -48,8 +46,7 @@ class MoodleServiceTest extends TestCase
         parent::tearDown();
     }
 
-    /** @test */
-    public function it_generates_unique_username_from_email()
+    public function test_it_generates_unique_username_from_email()
     {
         $email = 'test@example.com';
         $username1 = $this->service->generateUsername($email);
@@ -64,8 +61,7 @@ class MoodleServiceTest extends TestCase
         $this->assertStringStartsWith('test', $username2);
     }
 
-    /** @test */
-    public function it_generates_username_from_short_email()
+    public function test_it_generates_username_from_short_email()
     {
         $email = 'a@b.c';
         $username = $this->service->generateUsername($email);
@@ -73,8 +69,7 @@ class MoodleServiceTest extends TestCase
         $this->assertGreaterThanOrEqual(10, strlen($username));
     }
 
-    /** @test */
-    public function it_generates_secure_password()
+    public function test_it_generates_secure_password()
     {
         $password = $this->service->generatePassword(12);
 
@@ -83,8 +78,7 @@ class MoodleServiceTest extends TestCase
         $this->assertMatchesRegularExpression('/[0-9]/', $password);
     }
 
-    /** @test */
-    public function it_creates_new_user_in_moodle()
+    public function test_it_creates_new_user_in_moodle()
     {
         Http::fake([
             '*/webservice/rest/server.php*' => Http::sequence()
@@ -108,8 +102,7 @@ class MoodleServiceTest extends TestCase
         $this->assertFalse($result['existing']);
     }
 
-    /** @test */
-    public function it_returns_existing_user_if_already_exists()
+    public function test_it_returns_existing_user_if_already_exists()
     {
         Http::fake([
             '*/webservice/rest/server.php*' => Http::response([
@@ -137,8 +130,7 @@ class MoodleServiceTest extends TestCase
         $this->assertTrue($result['existing']);
     }
 
-    /** @test */
-    public function it_throws_exception_on_moodle_error()
+    public function test_it_throws_exception_on_moodle_error()
     {
         Http::fake([
             '*/webservice/rest/server.php*' => Http::response([
@@ -150,13 +142,10 @@ class MoodleServiceTest extends TestCase
 
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('Invalid token');
-
-        // ✅ Simplificar: solo llamar directamente
         $this->service->checkTokenPermissions();
     }
 
-    /** @test */
-    public function it_enrolls_user_in_course()
+    public function test_it_enrolls_user_in_course()
     {
         Http::fake([
             '*/webservice/rest/server.php*' => Http::response([], 200), // ✅ Array vacío, no null
@@ -167,8 +156,7 @@ class MoodleServiceTest extends TestCase
         $this->assertTrue($result);
     }
 
-    /** @test */
-    public function it_checks_if_user_is_enrolled()
+    public function test_it_checks_if_user_is_enrolled()
     {
         Http::fake([
             '*/webservice/rest/server.php*' => Http::response([
@@ -184,8 +172,7 @@ class MoodleServiceTest extends TestCase
         $this->assertFalse($isNotEnrolled);
     }
 
-    /** @test */
-    public function it_caches_user_lookup_by_email()
+    public function test_it_caches_user_lookup_by_email()
     {
         Http::fake([
             '*/webservice/rest/server.php*' => Http::response([
@@ -207,8 +194,7 @@ class MoodleServiceTest extends TestCase
         Http::assertSentCount(1); // Solo 1 request HTTP
     }
 
-    /** @test */
-    public function it_handles_connection_timeout()
+    public function test_it_handles_connection_timeout()
     {
         Http::fake(function () {
             throw new \Illuminate\Http\Client\ConnectionException('Connection timeout');
