@@ -151,6 +151,7 @@ class MoodleServiceTest extends TestCase
         $this->expectException(\Exception::class);
         $this->expectExceptionMessage('Invalid token');
 
+        // ✅ Simplificar: solo llamar directamente
         $this->service->checkTokenPermissions();
     }
 
@@ -158,7 +159,7 @@ class MoodleServiceTest extends TestCase
     public function it_enrolls_user_in_course()
     {
         Http::fake([
-            '*/webservice/rest/server.php*' => Http::response(null, 200),
+            '*/webservice/rest/server.php*' => Http::response([], 200), // ✅ Array vacío, no null
         ]);
 
         $result = $this->service->enrollUser(123, 2, 5);
@@ -216,6 +217,7 @@ class MoodleServiceTest extends TestCase
         $this->expectException(MoodleServiceException::class);
         $this->expectExceptionMessage('Failed to connect to Moodle');
 
+        // ✅ Simplificar
         $this->service->checkTokenPermissions();
     }
 }

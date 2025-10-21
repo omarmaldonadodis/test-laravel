@@ -3,6 +3,8 @@
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          bootstrap="vendor/autoload.php"
          colors="true"
+         failOnRisky="true"
+         failOnWarning="true"
 >
     <testsuites>
         <testsuite name="Unit">
@@ -16,7 +18,12 @@
         <include>
             <directory>app</directory>
         </include>
+        <exclude>
+            <directory>app/Console</directory>
+                <file>app/Providers/AppServiceProvider.php</file>
+        </exclude>
     </source>
+
     <php>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
@@ -30,5 +37,25 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
-    </php>
-</phpunit>
+        
+        <!-- Moodle Test Config -->
+        <env name="MOODLE_URL" value="http://moodle-docker-webserver-1"/>
+        <env name="MOODLE_TOKEN" value="041f1879bcd0ed2d1bdbdced5b6325cc"/>
+        <env name="MOODLE_SERVICE" value="laravel2"/>
+        <env name="MOODLE_DEFAULT_COURSE_ID" value="2"/>
+        <env name="MOODLE_TIMEOUT" value="30"/>
+        <env name="MOODLE_CACHE_TTL" value="3600"/>
+        <env name="MOODLE_RATE_LIMIT_ENABLED" value="false"/>
+        
+        <!-- Medusa Test Config -->
+        <env name="MEDUSA_URL" value="http://medusa_backend:9000"/>
+        <env name="MEDUSA_WEBHOOK_SECRET" value="Wp7WCBqjZ3R6qdIix/lm3fsVjgU5aqs4mThbNmiZk1g="/>
+        </php>
+
+        <coverage>
+            <report>
+                <html outputDirectory="coverage"/>
+                <text outputFile="php://stdout" showUncoveredFiles="false"/>
+            </report>
+        </coverage>
+        </phpunit>

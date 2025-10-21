@@ -2,20 +2,33 @@
 
 namespace Tests\Feature;
 
-use App\Exceptions\MoodleServiceException;
 use App\Services\RateLimiting\MoodleRateLimiter;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Exceptions\MoodleServiceException;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class MoodleRateLimiterTest extends TestCase
 {
-    public function test_it_allows_requests_until_limit_is_reached()
+    protected function setUp(): void
+    {
+        parent::setUp();
+        
+        // ✅ Habilitar rate limiting para estos tests
+        config(['services.moodle.rate_limit' => [
+            'enabled' => true,
+            'max_attempts' => 10,
+            'decay_seconds' => 60,
+        ]]);
+        
+        Cache::flush();
+    }
+
+    /** @test */
+    public function it_allows_requests_until_limit_is_reached()
     {
         $limiter = new MoodleRateLimiter();
-        $limiter->reset('test');
 
-        for ($i = 1; $i <= 60; $i++) {
+        for ($i = 0; $i < 10; $i++) {
             $this->assertTrue($limiter->attempt('test'));
             $limiter->hit('test');
         }
@@ -23,16 +36,21 @@ class MoodleRateLimiterTest extends TestCase
         $this->assertEquals(0, $limiter->remaining('test'));
     }
 
-    public function test_it_throws_exception_after_limit()
+    /** @test */
+    public function it_throws_exception_after_limit()
     {
-        $this->expectException(MoodleServiceException::class);
-
         $limiter = new MoodleRateLimiter();
-        $limiter->reset('test');
 
-        for ($i = 1; $i <= 61; $i++) {
+        // Hacer 10 llamadas
+        for ($i = 0; $i < 10; $i++) {
             $limiter->attempt('test');
             $limiter->hit('test');
         }
+
+        // La 11ª debe fallar
+        $this->expectException(MoodleServiceException::class);
+        $this->expectExceptionMessage('rate limit exceeded');
+
+        $limiter->attempt('test');
     }
 }

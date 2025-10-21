@@ -6,8 +6,10 @@ use App\Contracts\MoodleServiceInterface;
 use App\DTOs\MedusaOrderDTO;
 use App\Events\MoodleUserCreated;
 use App\Jobs\CreateMoodleUserJob;
+use App\Exceptions\MoodleServiceException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 use Mockery;
 use Tests\TestCase;
 
@@ -21,10 +23,9 @@ class CreateMoodleUserJobTest extends TestCase
         parent::tearDown();
     }
 
-    
-    public function test_it_creates_moodle_user_and_fires_event(): void
+    /** @test */
+    public function it_creates_moodle_user_and_fires_event()
     {
-        // Arrange
         Event::fake();
         
         $orderDTO = new MedusaOrderDTO(
@@ -58,20 +59,18 @@ class CreateMoodleUserJobTest extends TestCase
 
         $this->app->instance(MoodleServiceInterface::class, $mockService);
 
-        // Act
         $job = new CreateMoodleUserJob($orderDTO);
         $job->handle($mockService);
 
-        // Assert
         Event::assertDispatched(MoodleUserCreated::class);
     }
 
-    public function test_it_handles_invalid_order_data(): void
+    /** @test */
+    public function it_handles_invalid_order_data()
     {
-        // Arrange
         $orderDTO = new MedusaOrderDTO(
             orderId: 'order_456',
-            customerEmail: 'invalid-email', // Email inválido
+            customerEmail: 'invalid-email',
             customerFirstName: 'Jane',
             customerLastName: 'Doe',
             items: [],
@@ -80,10 +79,69 @@ class CreateMoodleUserJobTest extends TestCase
         $mockService = Mockery::mock(MoodleServiceInterface::class);
         $this->app->instance(MoodleServiceInterface::class, $mockService);
 
-        // Act & Assert
-        $this->expectException(\App\Exceptions\MoodleServiceException::class);
+        $this->expectException(MoodleServiceException::class);
         
         $job = new CreateMoodleUserJob($orderDTO);
         $job->handle($mockService);
+    }
+
+    /** @test */
+    public function it_retries_on_failure()
+    {
+        $job = new CreateMoodleUserJob(
+            new MedusaOrderDTO(
+                orderId: 'order_retry',
+                customerEmail: 'retry@example.com',
+                customerFirstName: 'Retry',
+                customerLastName: 'Test',
+                items: []
+            )
+        );
+
+        $this->assertEquals(3, $job->tries);
+        $this->assertEquals([60, 300, 900], $job->backoff);
+    }
+
+    /** @test */
+    public function it_has_correct_tags_for_horizon()
+    {
+        $orderDTO = new MedusaOrderDTO(
+            orderId: 'order_tags_test',
+            customerEmail: 'tags@example.com',
+            customerFirstName: 'Tags',
+            customerLastName: 'Test',
+            items: []
+        );
+
+        $job = new CreateMoodleUserJob($orderDTO);
+        $tags = $job->tags();
+
+        $this->assertContains('moodle', $tags);
+        $this->assertContains('user-creation', $tags);
+        $this->assertContains('order:order_tags_test', $tags);
+        $this->assertContains('email:tags@example.com', $tags);
+    }
+
+    /** @test */
+    public function it_calls_failed_method_on_final_failure()
+    {
+        Event::fake();
+        
+        $orderDTO = new MedusaOrderDTO(
+            orderId: 'order_failed',
+            customerEmail: 'failed@example.com',
+            customerFirstName: 'Failed',
+            customerLastName: 'Test',
+            items: []
+        );
+
+        $job = new CreateMoodleUserJob($orderDTO);
+        
+        // Simular fallo
+        $exception = new \Exception('Test failure');
+        $job->failed($exception);
+
+        // Verificar que no lanza excepción
+        $this->assertTrue(true);
     }
 }

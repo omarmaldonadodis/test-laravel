@@ -1,6 +1,7 @@
 <?php
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\MedusaWebhookController;
+use App\Http\Controllers\Api\EnrollmentLogController;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,9 +15,11 @@ Route::prefix('webhooks/medusa')
     ->group(function () {
         Route::post('/order-paid', [MedusaWebhookController::class, 'handleOrderPaid'])
             ->name('webhooks.medusa.order-paid');
-
     });
 
+// ✅ Health Check (sin middleware)
+Route::get('webhooks/medusa/health', [MedusaWebhookController::class, 'healthCheck'])
+    ->name('webhooks.medusa.health');
 
 // Endpoints de EnrollmentLogs (protegidos)
 Route::middleware(['auth:sanctum'])->prefix('enrollment-logs')->group(function () {
@@ -24,4 +27,3 @@ Route::middleware(['auth:sanctum'])->prefix('enrollment-logs')->group(function (
     Route::get('/{id}', [EnrollmentLogController::class, 'show'])->name('enrollment-logs.show');
     Route::get('/order/{orderId}', [EnrollmentLogController::class, 'showByOrderId'])->name('enrollment-logs.by-order');
 });
-

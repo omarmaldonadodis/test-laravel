@@ -215,8 +215,29 @@ class MoodleService implements MoodleServiceInterface
     /** Genera contraseña segura */
     public function generatePassword(int $length = 12): string
     {
-        $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%';
-        return substr(str_shuffle(str_repeat($chars, ceil($length / strlen($chars)))), 0, $length);
+        // ✅ Asegurar que incluya al menos: 1 letra minúscula, 1 mayúscula, 1 número, 1 especial
+        $lowercase = 'abcdefghijklmnopqrstuvwxyz';
+        $uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $numbers = '0123456789';
+        $special = '!@#$%';
+        
+        // Asegurar al menos un carácter de cada tipo
+        $password = '';
+        $password .= $lowercase[random_int(0, strlen($lowercase) - 1)];
+        $password .= $uppercase[random_int(0, strlen($uppercase) - 1)];
+        $password .= $numbers[random_int(0, strlen($numbers) - 1)];
+        $password .= $special[random_int(0, strlen($special) - 1)];
+        
+        // Rellenar el resto con caracteres aleatorios
+        $allChars = $lowercase . $uppercase . $numbers . $special;
+        $remaining = $length - 4;
+        
+        for ($i = 0; $i < $remaining; $i++) {
+            $password .= $allChars[random_int(0, strlen($allChars) - 1)];
+        }
+        
+        // Mezclar para que los caracteres obligatorios no estén siempre al inicio
+        return str_shuffle($password);
     }
 
     /** Verifica permisos del token */
@@ -255,9 +276,6 @@ class MoodleService implements MoodleServiceInterface
      */
     private function callWebService(string $function, array $params = [])
     {
-        // ✅ VERIFICAR RATE LIMIT
-        $this->rateLimiter->attempt();
-
         $url = "{$this->moodleUrl}/webservice/rest/server.php";
 
         $requestParams = array_merge([
@@ -288,8 +306,17 @@ class MoodleService implements MoodleServiceInterface
                 );
             }
 
+            $body = $response->body();
+            
+            // ✅ Manejar respuesta vacía (válida para algunas funciones como enrollment)
+            if (empty($body)) {
+                return []; // Respuesta vacía válida
+            }
+
             $data = $response->json();
-            if (!$data) {
+            
+            // ✅ Si json() retorna null, la respuesta no es JSON válido
+            if ($data === null) {
                 throw new \Exception('Invalid JSON response from Moodle');
             }
 
@@ -301,7 +328,7 @@ class MoodleService implements MoodleServiceInterface
         } catch (ConnectionException $e) {
             throw MoodleServiceException::connectionFailed($e->getMessage());
         } catch (MoodleServiceException $e) {
-            throw $e; // Re-lanzar excepciones de rate limit
+            throw $e; // Re-lanzar excepciones de rate limit y connection
         } catch (\Exception $e) {
             Log::error('💥 Error general en callWebService', [
                 'function' => $function,

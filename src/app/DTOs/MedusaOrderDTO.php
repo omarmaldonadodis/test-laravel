@@ -25,8 +25,10 @@ class MedusaOrderDTO
      */
     public static function fromWebhookPayload(array $payload): self
     {
+        $orderId = self::extractOrderId($payload);
+        
         return new self(
-            orderId: Arr::get($payload, 'order_id', 'unknown'),
+            orderId: $orderId,
             customerEmail: Arr::get($payload, 'customer.email', ''),
             customerFirstName: Arr::get($payload, 'customer.first_name', 'Usuario'),
             customerLastName: Arr::get($payload, 'customer.last_name', 'Medusa'),
@@ -34,6 +36,42 @@ class MedusaOrderDTO
             customerId: Arr::get($payload, 'customer.id'),
             metadata: Arr::get($payload, 'metadata', [])
         );
+    }
+
+    /**
+     * Extrae el Order ID usando diferentes estrategias
+     */
+    private static function extractOrderId(array $payload): string
+    {
+        // Estrategia 1: Buscar 'id' en raíz
+        if ($id = Arr::get($payload, 'id')) {
+            return $id;
+        }
+
+        // Estrategia 2: Buscar 'order_id' en raíz
+        if ($orderId = Arr::get($payload, 'order_id')) {
+            return $orderId;
+        }
+
+        // Estrategia 3: Buscar en metadata
+        if ($orderId = Arr::get($payload, 'metadata.order_id')) {
+            return $orderId;
+        }
+
+        // Estrategia 4: Generar desde customer ID + timestamp
+        $customerId = Arr::get($payload, 'customer.id');
+        if ($customerId) {
+            return "ord_{$customerId}_" . now()->timestamp;
+        }
+
+        // Estrategia 5: Usar el ID del primer item
+        $firstItem = Arr::get($payload, 'items.0');
+        if ($firstItem && isset($firstItem['id'])) {
+            return "ord_from_item_" . $firstItem['id'];
+        }
+
+        // Fallback: Generar ID único
+        return 'ord_' . uniqid();
     }
 
     /**
@@ -55,7 +93,9 @@ class MedusaOrderDTO
     public function isValid(): bool
     {
         return !empty($this->customerEmail) 
-            && filter_var($this->customerEmail, FILTER_VALIDATE_EMAIL);
+            && filter_var($this->customerEmail, FILTER_VALIDATE_EMAIL)
+            && !empty($this->orderId)
+            && $this->orderId !== 'unknown';
     }
 
     /**
@@ -73,6 +113,9 @@ class MedusaOrderDTO
 
     public function getFullName(): string
     {
-        return trim("{$this->customerFirstName} {$this->customerLastName}");
+        $firstName = trim($this->customerFirstName);
+        $lastName = trim($this->customerLastName);
+        
+        return trim("{$firstName} {$lastName}");
     }
 }
