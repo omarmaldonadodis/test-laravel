@@ -15,6 +15,7 @@ use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use Exception;
 
+
 class MoodleService implements MoodleServiceInterface
 {
     private string $moodleUrl;
@@ -277,106 +278,101 @@ class MoodleService implements MoodleServiceInterface
     /**
      * Llamada genérica al API Moodle con rate limiting
      */
-    private function callWebService(string $function, array $params = [])
-    {
-        $url = "{$this->moodleUrl}/webservice/rest/server.php";
+    /**
+ * Llamada genérica al API Moodle con rate limiting y sanitización de respuesta
+ */
+private function callWebService(string $function, array $params = [])
+{
+    $url = "{$this->moodleUrl}/webservice/rest/server.php";
 
-        $requestParams = array_merge([
-            'wstoken' => $this->token,
-            'wsfunction' => $function,
-            'moodlewsrestformat' => 'json',
-        ], $params);
+    $requestParams = array_merge([
+        'wstoken' => $this->token,
+        'wsfunction' => $function,
+        'moodlewsrestformat' => 'json',
+    ], $params);
 
-        try {
-            $start = microtime(true);
-            $response = Http::timeout($this->timeout)->asForm()->post($url, $requestParams);
-            $duration = round((microtime(true) - $start) * 1000, 2);
+    try {
+        $start = microtime(true);
+        $response = Http::timeout($this->timeout)->asForm()->post($url, $requestParams);
+        $duration = round((microtime(true) - $start) * 1000, 2);
 
-            // ✅ REGISTRAR LLAMADA EXITOSA
-            $this->rateLimiter->hit();
+        // Rate limiter
+        $this->rateLimiter->hit();
 
-            Log::info('📤 Moodle API llamada', [
-                'function' => $function,
-                'status' => $response->status(),
-                'time_ms' => $duration,
-                'rate_limit_remaining' => $this->rateLimiter->remaining(),
-            ]);
+        Log::info('📤 Moodle API llamada', [
+            'function' => $function,
+            'status' => $response->status(),
+            'time_ms' => $duration,
+            'rate_limit_remaining' => $this->rateLimiter->remaining(),
+        ]);
 
-            // ✅ Validar HTTP status
-            if ($response->failed()) {
-                $status = $response->status();
-                $body = $response->body();
-                
-                $errorMessage = match($status) {
-                    401 => 'Unauthorized - Invalid Moodle token',
-                    403 => 'Forbidden - Insufficient permissions',
-                    429 => 'Rate limit exceeded',
-                    500, 502, 503 => 'Moodle server error',
-                    default => "HTTP Error {$status}",
-                };
-                
-                throw MoodleServiceException::connectionFailed(
-                    $errorMessage,
-                    [
-                        'status' => $status,
-                        'body' => $body,
-                        'function' => $function
-                    ]
-                );
-            }
-
+        // Validar HTTP status
+        if ($response->failed()) {
+            $status = $response->status();
             $body = $response->body();
-            
-            // ✅ Manejar respuesta vacía (válida para enrollment)
-            if (empty($body)) {
-                return [];
-            }
 
-            $data = $response->json();
-            
-            // ✅ Validar JSON válido
-            if ($data === null && json_last_error() !== JSON_ERROR_NONE) {
-                throw new \Exception('Invalid JSON response from Moodle: ' . json_last_error_msg());
-            }
+            $errorMessage = match($status) {
+                401 => 'Unauthorized - Invalid Moodle token',
+                403 => 'Forbidden - Insufficient permissions',
+                429 => 'Rate limit exceeded',
+                500, 502, 503 => 'Moodle server error',
+                default => "HTTP Error {$status}",
+            };
 
-            // ✅ VALIDACIÓN COMPLETA: Verificar si es un error de Moodle
-            if (is_array($data) && isset($data['exception'])) {
-                $errorCode = $data['errorcode'] ?? 'unknown';
-                $message = $data['message'] ?? 'Unknown Moodle error';
-                
-                Log::error('❌ Moodle API error', [
-                    'function' => $function,
-                    'error_code' => $errorCode,
-                    'message' => $message,
-                ]);
-                
-                throw new \Exception("Moodle Error [{$errorCode}]: {$message}");
-            }
-
-            // ✅ Validar que la respuesta sea un array (estructura esperada)
-            if (!is_array($data)) {
-                throw new \Exception('Unexpected response format from Moodle');
-            }
-
-            return $data;
-            
-        } catch (ConnectionException $e) {
-            Log::error('💥 Connection error to Moodle', [
-                'function' => $function,
-                'error' => $e->getMessage(),
-            ]);
-            throw MoodleServiceException::connectionFailed($e->getMessage());
-            
-        } catch (MoodleServiceException $e) {
-            throw $e; // Re-lanzar excepciones específicas
-            
-        } catch (\Exception $e) {
-            Log::error('💥 Error general en callWebService', [
-                'function' => $function,
-                'error' => $e->getMessage(),
-                'trace' => config('app.debug') ? $e->getTraceAsString() : null,
-            ]);
-            throw $e;
+            throw MoodleServiceException::connectionFailed(
+                $errorMessage,
+                [
+                    'status' => $status,
+                    'body' => $body,
+                    'function' => $function
+                ]
+            );
         }
+
+        // Sanitizar body
+        $body = trim($response->body(), "\x00..\x1F");
+
+
+        $data = json_decode($body, true);
+
+        if ($body !== 'null' && $data === null && json_last_error() !== JSON_ERROR_NONE) {
+            throw new \Exception('Invalid JSON response from Moodle: ' . json_last_error_msg());
+        }
+
+        // Validación de errores de Moodle
+        if (is_array($data) && isset($data['exception'])) {
+            $errorCode = $data['errorcode'] ?? 'unknown';
+            $message = $data['message'] ?? 'Unknown Moodle error';
+
+            Log::error('❌ Moodle API error', [
+                'function' => $function,
+                'error_code' => $errorCode,
+                'message' => $message,
+            ]);
+
+            throw new \Exception("Moodle Error [{$errorCode}]: {$message}");
+        }
+
+        return $data ?? [];
+
+    } catch (ConnectionException $e) {
+        Log::error('💥 Connection error to Moodle', [
+            'function' => $function,
+            'error' => $e->getMessage(),
+        ]);
+        throw MoodleServiceException::connectionFailed($e->getMessage());
+
+    } catch (MoodleServiceException $e) {
+        throw $e;
+
+    } catch (\Exception $e) {
+        Log::error('💥 Error general en callWebService', [
+            'function' => $function,
+            'error' => $e->getMessage(),
+            'trace' => config('app.debug') ? $e->getTraceAsString() : null,
+        ]);
+        throw $e;
     }
+}
+
 }
