@@ -16,12 +16,14 @@ class MoodleCompensationService
 
     public function recordUserCreation(int $moodleUserId, string $orderId): void
     {
-        $this->cache->put($orderId, [
+        $data = $this->cache->get($orderId) ?? [];
+        $data = array_merge($data, [
             'moodle_user_id' => $moodleUserId,
-            'created_at' => now()->toIso8601String(),
             'status' => 'pending_enrollment',
+            'created_at' => $data['created_at'] ?? now()->toIso8601String(),
         ]);
 
+        $this->cache->put($orderId, $data, 24); // 24h
         Log::info('📝 User creation recorded for compensation', compact('orderId', 'moodleUserId'));
     }
 
@@ -29,19 +31,27 @@ class MoodleCompensationService
     {
         $data = $this->cache->get($orderId);
         if ($data) {
-            $data['status'] = 'completed';
-            $data['completed_at'] = now()->toIso8601String();
-            $this->cache->put($orderId, $data, 168); // 7 días en horas
-
+            $data = array_merge($data, [
+                'status' => 'completed',
+                'completed_at' => now()->toIso8601String(),
+            ]);
+            $this->cache->put($orderId, $data, 168); // 7 días
             Log::info('✅ Enrollment marked as completed', compact('orderId'));
         }
     }
+
 
     public function compensateFailedEnrollment(string $orderId, string $reason): void
     {
         $data = $this->cache->get($orderId);
         if (!$data) {
             Log::warning('⚠️ No compensation data found', compact('orderId'));
+            return;
+        }
+
+        $existing = \App\Models\FailedEnrollment::where('order_id', $orderId)->first();
+        if ($existing) {
+            Log::info('ℹ️ Enrollment already compensated', compact('orderId'));
             return;
         }
 
@@ -56,9 +66,9 @@ class MoodleCompensationService
         $data['status'] = 'failed';
         $data['failed_at'] = now()->toIso8601String();
         $data['failure_reason'] = $reason;
-        $this->cache->put($orderId, $data, 720); // 30 días en horas
+        $this->cache->put($orderId, $data, 720); // 30 días
 
-        Log::warning('⚠️ Enrollment failed - User created but not enrolled', [
+        Log::warning('Enrollment failed - User created but not enrolled', [
             'order_id' => $orderId,
             'moodle_user_id' => $data['moodle_user_id'],
             'reason' => $reason,
@@ -80,12 +90,12 @@ class MoodleCompensationService
                 $this->markEnrollmentSuccess($failure->order_id);
                 $retried++;
 
-                Log::info('✅ Enrollment retry successful', [
+                Log::info('Enrollment retry successful', [
                     'order_id' => $failure->order_id,
                     'moodle_user_id' => $failure->moodle_user_id,
                 ]);
             } catch (\Exception $e) {
-                Log::error('❌ Enrollment retry failed', [
+                Log::error('Enrollment retry failed', [
                     'order_id' => $failure->order_id,
                     'error' => $e->getMessage(),
                 ]);
