@@ -304,9 +304,24 @@ class MoodleService implements MoodleServiceInterface
 
             // ✅ Validar HTTP status
             if ($response->failed()) {
+                $status = $response->status();
+                $body = $response->body();
+                
+                $errorMessage = match($status) {
+                    401 => 'Unauthorized - Invalid Moodle token',
+                    403 => 'Forbidden - Insufficient permissions',
+                    429 => 'Rate limit exceeded',
+                    500, 502, 503 => 'Moodle server error',
+                    default => "HTTP Error {$status}",
+                };
+                
                 throw MoodleServiceException::connectionFailed(
-                    "HTTP Error {$response->status()}",
-                    ['body' => $response->body()]
+                    $errorMessage,
+                    [
+                        'status' => $status,
+                        'body' => $body,
+                        'function' => $function
+                    ]
                 );
             }
 

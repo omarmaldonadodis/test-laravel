@@ -92,7 +92,7 @@ class MedusaOrderDTO
      */
     public function isValid(): bool
     {
-        return !empty($this->customerEmail) 
+        return !empty(trim($this->customerEmail))
             && filter_var($this->customerEmail, FILTER_VALIDATE_EMAIL)
             && !empty($this->orderId)
             && $this->orderId !== 'unknown';

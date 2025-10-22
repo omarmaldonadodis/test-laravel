@@ -162,41 +162,36 @@ class MedusaWebhookController extends Controller
      */
     public function handleOrderPaid(MedusaWebhookRequest $request): JsonResponse
     {
-        try {
+        // ✅ INICIO DE MÉTRICAS
+        $startTime = microtime(true);
+        $webhookId = $request->header('X-Webhook-Id') ?? uniqid('wh_');
 
+        try {
             Log::debug('🔍 Payload RAW', [
                 'validated' => $request->validated(),
                 'validatedForDTO' => $request->validatedForDTO(),
             ]);
-            
-            $orderDTO = MedusaOrderDTO::fromWebhookPayload($request->validatedForDTO());
-            
-            // 🔍 DEBUG: Ver el DTO creado
-            Log::debug('🔍 DTO Creado', [
-                'orderId' => $orderDTO->orderId,
-                'email' => $orderDTO->customerEmail,
-                'isValid' => $orderDTO->isValid(),
-            ]);
-        
 
-            // Generar webhook ID único
-            $webhookId = $request->header('X-Webhook-Id') ?? $orderDTO->orderId ?? uniqid('wh_');
+            $orderDTO = MedusaOrderDTO::fromWebhookPayload($request->validatedForDTO());
             $orderId = $orderDTO->orderId;
-            
+
             Log::info('📥 Webhook recibido', [
                 'webhook_id' => $webhookId,
                 'order_id' => $orderId,
                 'email' => $orderDTO->customerEmail,
             ]);
 
-            // ✅ VALIDAR DATOS ANTES DE VERIFICAR IDEMPOTENCIA
+            // Validar datos
             if (!$orderDTO->isValid()) {
+                $duration = round((microtime(true) - $startTime) * 1000, 2);
+
                 Log::warning('⚠️ Payload inválido del webhook', [
                     'webhook_id' => $webhookId,
                     'order_id' => $orderId,
                     'email' => $orderDTO->customerEmail,
+                    'duration_ms' => $duration,
                 ]);
-                
+
                 return (new ErrorResource([
                     'message' => 'Invalid webhook payload: Email is required and must be valid',
                     'code' => 'INVALID_PAYLOAD',
@@ -204,14 +199,17 @@ class MedusaWebhookController extends Controller
                 ]))->response();
             }
 
-            // ✅ VERIFICACIÓN DE IDEMPOTENCIA (con el payload completo para guardar)
+            // Verificar idempotencia
             $payload = $request->validated();
-            
+
             if (!$this->idempotencyService->checkAndMark($webhookId, $orderId, $payload)) {
+                $duration = round((microtime(true) - $startTime) * 1000, 2);
+
                 Log::info('⚠️ Webhook duplicado ignorado', [
                     'webhook_id' => $webhookId,
                     'order_id' => $orderId,
                     'email' => $orderDTO->customerEmail,
+                    'duration_ms' => $duration,
                 ]);
 
                 return (new WebhookResponseResource([
@@ -219,16 +217,29 @@ class MedusaWebhookController extends Controller
                     'status' => 'duplicate',
                     'order_id' => $orderId,
                     'customer_email' => $orderDTO->customerEmail,
-                ]))->response()->setStatusCode(200); // 200 para evitar reintentos
+                ]))->response()->setStatusCode(200);
             }
 
-            // ✅ DESPACHAR JOB (usando el DTO que ya tenemos)
+            // Despachar Job
             CreateMoodleUserJob::dispatch($orderDTO);
+
+            // ✅ MÉTRICAS FINALES
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
 
             Log::info('📤 Job despachado a la cola', [
                 'webhook_id' => $webhookId,
                 'order_id' => $orderId,
                 'email' => $orderDTO->customerEmail,
+                'duration_ms' => $duration,
+                'queue' => 'default',
+            ]);
+
+            Log::info('📊 Webhook metrics', [
+                'webhook_id' => $webhookId,
+                'processing_time_ms' => $duration,
+                'items_count' => count($orderDTO->items),
+                'courses_count' => count($orderDTO->getCourseIds()),
+                'status' => 'queued',
             ]);
 
             return (new WebhookResponseResource([
@@ -241,10 +252,14 @@ class MedusaWebhookController extends Controller
             ]))->response();
 
         } catch (\Throwable $e) {
+            $duration = round((microtime(true) - $startTime) * 1000, 2);
+
             Log::error('❌ Error al procesar webhook', [
+                'webhook_id' => $webhookId ?? 'unknown',
                 'error' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
+                'duration_ms' => $duration,
                 'trace' => config('app.debug') ? $e->getTraceAsString() : null,
             ]);
 
