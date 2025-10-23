@@ -56,15 +56,6 @@ class CreateMoodleUserJob implements ShouldQueue
         ]);
 
         try {
-            // Validar datos
-            if (!$this->order->isValid()) {
-                throw new MoodleServiceException(
-                    'Invalid order data',
-                    422,
-                    null,
-                    $this->order->toArray()
-                );
-            }
 
             // Generar credenciales
             $username = $moodleService->generateUsername($this->order->customerEmail);

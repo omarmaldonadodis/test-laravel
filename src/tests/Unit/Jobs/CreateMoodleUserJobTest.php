@@ -7,7 +7,7 @@ use App\DTOs\MedusaOrderDTO;
 use App\Events\MoodleUserCreated;
 use App\Jobs\CreateMoodleUserJob;
 use App\Exceptions\MoodleServiceException;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Mockery;
@@ -15,8 +15,7 @@ use Tests\TestCase;
 
 class CreateMoodleUserJobTest extends TestCase
 {
-    use RefreshDatabase;
-
+    use DatabaseTransactions;
     protected function tearDown(): void
     {
         Mockery::close();
@@ -75,13 +74,25 @@ class CreateMoodleUserJobTest extends TestCase
         );
 
         $mockService = Mockery::mock(MoodleServiceInterface::class);
+
+        // ✅ Simular que al intentar generar el username con un email inválido, lanza la excepción esperada
+        $mockService->shouldReceive('generateUsername')
+            ->once()
+            ->with('invalid-email')
+            ->andThrow(new MoodleServiceException('Invalid email'));
+
+        // También puedes stubear los otros métodos para evitar que se llamen accidentalmente
+        $mockService->shouldReceive('generatePassword')->never();
+        $mockService->shouldReceive('createUser')->never();
+
         $this->app->instance(MoodleServiceInterface::class, $mockService);
 
         $this->expectException(MoodleServiceException::class);
-        
+
         $job = new CreateMoodleUserJob($orderDTO);
         $job->handle($mockService);
     }
+
 
     public function test_it_retries_on_failure()
     {

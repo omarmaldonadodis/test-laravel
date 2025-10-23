@@ -1,59 +1,63 @@
 <?php
-
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class MedusaWebhookRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // La autorización se maneja en el middleware VerifyWebhookSignature
         return true;
     }
-
-    
 
     public function rules(): array
     {
         return [
-        'order_id' => 'nullable|string',
-        'type' => 'nullable|string',
-        'customer' => 'required|array',
-        'customer.email' => 'required|email',
-        'customer.first_name' => 'required|string',
-        'customer.last_name' => 'required|string',
-        'customer.id' => 'nullable|string',
-        'items' => 'required|array|min:1',
-      ];
-    }
-
-    public function messages(): array
-    {
-        return [
-            'data.email.email' => 'Customer email must be valid',
-            'order.email.email' => 'Order email must be valid',
+            'customer.email' => 'required|email',
+            'customer.first_name' => 'required|string|min:2',
+            'customer.last_name' => 'required|string|min:2',
+            'customer.id' => 'nullable|string',
+            'items' => 'required|array|min:1',
         ];
     }
 
-    /**
-     * Handle a failed validation attempt.
-     */
-    protected function failedValidation(\Illuminate\Contracts\Validation\Validator $validator)
+    // ✅ NUEVO: Validación adicional después de las reglas básicas
+    public function withValidator(Validator $validator): void
     {
-        \Illuminate\Support\Facades\Log::warning('Medusa webhook validation failed', [
-            'errors' => $validator->errors()->toArray(),
-            'payload_keys' => array_keys($this->all()),
-        ]);
-
-        parent::failedValidation($validator);
+        $validator->after(function ($validator) {
+            $orderDTO = $this->toOrderDTO();
+            
+            if (!$orderDTO->isValid()) {
+                $validator->errors()->add(
+                    'order',
+                    'Invalid order data: email or order ID missing'
+                );
+            }
+        });
     }
 
-    /**
-     * Get validated data ready for DTO
-     */
-    public function validatedForDTO(): array
+    // ✅ NUEVO: Método helper para convertir a DTO
+    public function toOrderDTO(): \App\DTOs\MedusaOrderDTO
     {
-        return $this->validated();
+        return \App\DTOs\MedusaOrderDTO::fromWebhookPayload(
+            $this->validated()
+        );
+    }
+
+    // Respuesta personalizada para errores de validación
+    protected function failedValidation(Validator $validator)
+    {
+        throw new HttpResponseException(
+            response()->json([
+                'error' => [
+                    'message' => 'Invalid webhook payload',
+                    'code' => 'VALIDATION_ERROR',
+                    'status' => 422,
+                    'details' => $validator->errors(),
+                ],
+            ], 422)
+        );
     }
 }
