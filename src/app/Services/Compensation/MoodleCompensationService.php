@@ -8,11 +8,17 @@ use Illuminate\Support\Facades\Log;
 
 class MoodleCompensationService
 {
+    private int $defaultCourseId;
+
     public function __construct(
         private MoodleServiceInterface $moodleService,
         private FailedEnrollmentRepositoryInterface $repository,
-        private CompensationCache $cache
-    ) {}
+        private CompensationCache $cache,
+        ?int $defaultCourseId = null // ✅ PARÁMETRO OPCIONAL
+    ) {
+        // ✅ Si no se pasa, usar config() (solo en producción)
+        $this->defaultCourseId = $defaultCourseId ?? config('services.moodle.default_course_id', 2);
+    }
 
     public function recordUserCreation(int $moodleUserId, string $orderId): void
     {
@@ -39,7 +45,6 @@ class MoodleCompensationService
             Log::info('✅ Enrollment marked as completed', compact('orderId'));
         }
     }
-
 
     public function compensateFailedEnrollment(string $orderId, string $reason): void
     {
@@ -83,7 +88,7 @@ class MoodleCompensationService
 
         foreach ($failed as $failure) {
             try {
-                $courseId = config('services.moodle.default_course_id', 2);
+                $courseId = $this->defaultCourseId; // ✅ Usar propiedad
                 $this->moodleService->enrollUser($failure->moodle_user_id, $courseId);
 
                 $this->repository->markResolved($failure->order_id);

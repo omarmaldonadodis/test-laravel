@@ -196,9 +196,15 @@ class CompensationIntegrationTest extends TestCase
         
         // Simular procesamiento
         Http::fake([
-            '*/webservice/rest/server.php*' => Http::response([
-                ['id' => 666, 'username' => 'racetest']
-            ], 200),
+        '*/webservice/rest/server.php*' => Http::sequence()
+            ->push([], 200) // getUserByEmail: no existe
+            ->push([[ // ✅ createUser debe devolver este formato
+                'id' => 666,
+                'username' => 'racetest',
+                'email' => 'race@test.com', // ⚠️ FALTABA ESTO
+                'firstname' => 'Race',
+                'lastname' => 'Test',
+            ]], 200),
         ]);
 
         $job1 = new CreateMoodleUserJob($orderDTO);
