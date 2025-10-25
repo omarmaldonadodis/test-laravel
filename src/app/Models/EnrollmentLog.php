@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class EnrollmentLog extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'stripe_payment_intent_id',
         'medusa_order_id',

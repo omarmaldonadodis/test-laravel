@@ -14,11 +14,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // Register custom Stripe middleware
-       /* $middleware->alias([
-            'verify.stripe.webhook' => VerifyStripeWebhook::class,
-        ]);*/
-        
+
+        $middleware->api(prepend: [
+             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+        ]);
+
         // Exclude the webhook route from CSRF verification if necessary
         $middleware->alias([
             'verify.webhook' => \App\Http\Middleware\VerifyWebhookSignature::class,
@@ -27,5 +27,12 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })->create();
+
+
+    # ->withMiddleware(function (Middleware $middleware) {
+#     $middleware->api(prepend: [
+#         \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+#     ]);
+# })
 
 

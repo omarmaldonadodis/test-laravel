@@ -1,15 +1,8 @@
 <?php
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\MedusaWebhookController;
 use App\Http\Controllers\Api\EnrollmentLogController;
+use App\Http\Controllers\Api\MedusaWebhookController;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes - Fashion Starter Integration
-|--------------------------------------------------------------------------
-*/
-
-// Webhooks de Medusa con validación HMAC
+// ✅ Rutas públicas (webhooks)
 Route::prefix('webhooks/medusa')
     ->middleware(['verify.webhook'])
     ->group(function () {
@@ -17,13 +10,39 @@ Route::prefix('webhooks/medusa')
             ->name('webhooks.medusa.order-paid');
     });
 
-// ✅ Health Check (sin middleware)
+// ✅ Health check público
 Route::get('webhooks/medusa/health', [MedusaWebhookController::class, 'healthCheck'])
     ->name('webhooks.medusa.health');
 
-// Endpoints de EnrollmentLogs (protegidos)
-Route::middleware(['auth:sanctum'])->prefix('enrollment-logs')->group(function () {
-    Route::get('/', [EnrollmentLogController::class, 'index'])->name('enrollment-logs.index');
-    Route::get('/{id}', [EnrollmentLogController::class, 'show'])->name('enrollment-logs.show');
-    Route::get('/order/{orderId}', [EnrollmentLogController::class, 'showByOrderId'])->name('enrollment-logs.by-order');
+// ✅ Rutas protegidas con Sanctum
+Route::middleware(['auth:sanctum'])->group(function () {
+    
+    // Enrollment Logs (requiere autenticación)
+    Route::prefix('enrollment-logs')->group(function () {
+        Route::get('/', [EnrollmentLogController::class, 'index'])
+            ->name('enrollment-logs.index');
+        
+        Route::get('/{id}', [EnrollmentLogController::class, 'show'])
+            ->name('enrollment-logs.show');
+        
+        Route::get('/order/{orderId}', [EnrollmentLogController::class, 'showByOrderId'])
+            ->name('enrollment-logs.by-order');
+    });
+
+    // ✅ NUEVO: Admin endpoints
+    Route::prefix('admin')->group(function () {
+        
+        // Ver jobs fallidos
+        Route::get('/failed-jobs', [\App\Http\Controllers\Api\AdminController::class, 'failedJobs'])
+            ->name('admin.failed-jobs');
+        
+        // Reintentar job fallido
+        Route::post('/failed-jobs/{id}/retry', [\App\Http\Controllers\Api\AdminController::class, 'retryJob'])
+            ->name('admin.retry-job');
+        
+        // Ver métricas
+        Route::get('/metrics', [\App\Http\Controllers\Api\AdminController::class, 'metrics'])
+            ->name('admin.metrics');
+    });
 });
+
