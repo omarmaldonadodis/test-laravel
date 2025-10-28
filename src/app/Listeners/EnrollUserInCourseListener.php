@@ -31,7 +31,8 @@ class EnrollUserInCourseListener implements ShouldQueue
                     'moodle_user_id' => $event->user->id,
                     'medusa_order_id' => $event->order->orderId,
                     'moodle_processed_at' => now(),
-                    'password' => bcrypt(str()->random(32)),
+                    // ✅ FIX: Usar contraseña aleatoria segura
+                    'password' => bcrypt(\Illuminate\Support\Str::random(32)),
                 ]
             );
 
@@ -41,6 +42,7 @@ class EnrollUserInCourseListener implements ShouldQueue
             if (empty($courseIds)) {
                 $courseIds = [(int) config('services.moodle.default_course_id', 2)];
             }
+            
             foreach ($courseIds as $courseId) {
                 EnrollUserInCourseJob::dispatch($user, (int) $courseId, MoodleRoles::STUDENT)
                     ->delay(now()->addSeconds(10));
@@ -52,7 +54,6 @@ class EnrollUserInCourseListener implements ShouldQueue
                 ]);
             }
 
-
         } catch (\Throwable $e) {
             Log::error('💥 Error en listener', [
                 'error' => $e->getMessage(),
@@ -61,12 +62,5 @@ class EnrollUserInCourseListener implements ShouldQueue
             ]);
             throw $e;
         }
-    }
-
-    public function failed(MoodleUserCreated $event, \Throwable $exception): void
-    {
-        Log::critical('💥 Listener falló', [
-            'error' => $exception->getMessage(),
-        ]);
     }
 }

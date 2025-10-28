@@ -17,8 +17,8 @@ class TestMoodleDirect extends Command
         $token = env('MOODLE_TOKEN');
         $email = 'test_' . time() . '@example.com';
         $username = 'testuser' . time();
-        $password = 'Test123!@#';
-
+        $password = Str::random(12);
+        
         $this->info('🧪 Testing Moodle User Creation Directly...');
         $this->line("URL: " . $url);
         $this->line("Token: " . substr($token, 0, 10) . '...');

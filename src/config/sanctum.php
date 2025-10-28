@@ -81,7 +81,17 @@ return [
         'validate_csrf_token' => Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
     ],
 
+<<<<<<< HEAD
 ];
 
 
 
+=======
+    'middleware' => [
+    'authenticate_session' => Laravel\Sanctum\Http\Middleware\AuthenticateSession::class,
+    'encrypt_cookies' => App\Http\Middleware\EncryptCookies::class,
+    'validate_csrf_token' => App\Http\Middleware\VerifyCsrfToken::class,
+],
+
+];
+>>>>>>> a1db5e1 (🔒 Seguridad: Proteger rutas API con middleware auth:sanctum)
