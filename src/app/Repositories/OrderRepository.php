@@ -2,30 +2,29 @@
 
 namespace App\Repositories;
 
-use Illuminate\Support\Facades\DB;
+use App\Contracts\OrderRepositoryInterface;
+use App\Models\Order;
 
-class OrderRepository
+class OrderRepository implements OrderRepositoryInterface
 {
-    public function findByMedusaId(string $medusaOrderId)
+    public function findByMedusaId(string $medusaOrderId): ?Order
     {
-        return DB::table('orders')->where('medusa_order_id', $medusaOrderId)->first();
+        return Order::where('medusa_order_id', $medusaOrderId)->first();
     }
 
-    public function save(array $data): int
+    public function create(array $data): Order
     {
-        return DB::table('orders')->insertGetId($data);
+        return Order::create($data);
     }
 
-    public function update(int $id, array $data): void
+    public function markAsProcessed(Order $order, int $moodleUserId): Order
     {
-        DB::table('orders')->where('id', $id)->update($data);
-    }
-
-    public function existsProcessed(string $orderId): bool
-    {
-        return DB::table('orders')
-            ->where('medusa_order_id', $orderId)
-            ->where('processed', true)
-            ->exists();
+        $order->update([
+            'moodle_user_id' => $moodleUserId,
+            'processed' => true,
+            'processed_at' => now(),
+        ]);
+        
+        return $order->fresh();
     }
 }

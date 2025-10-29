@@ -1,17 +1,16 @@
 <?php
 
 namespace App\Jobs;
-
 use App\Contracts\MoodleServiceInterface;
-use App\Models\User;
+use App\DTOs\MoodleUserDTO;
+use App\Exceptions\MoodleServiceException;
+use App\Constants\MoodleRoles;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use App\Constants\MoodleRoles;
-
 
 class EnrollUserInCourseJob implements ShouldQueue
 {
@@ -19,71 +18,55 @@ class EnrollUserInCourseJob implements ShouldQueue
 
     public int $tries = 3;
     public int $timeout = 120;
-    public array $backoff = [30, 60, 120];
+    public array $backoff = [60, 300, 900];
 
     public function __construct(
-        public User $user,
-        public int $courseId,
-        public ?int $roleId = null
-    ) {
-        $this->roleId = $roleId ?? MoodleRoles::STUDENT;
-    }
+        private readonly MoodleUserDTO $user,
+        private readonly int $courseId,
+        private readonly ?int $roleId = MoodleRoles::STUDENT
+    ) {}
 
     public function handle(MoodleServiceInterface $moodleService): void
     {
+        Log::info('🎓 Iniciando inscripción', [
+            'user_id' => $this->user->id,
+            'course_id' => $this->courseId,
+            'attempt' => $this->attempts(),
+        ]);
+
         try {
-            // Refrescar el usuario desde BD para obtener datos actualizados
-            $this->user->refresh();
-
-            Log::info('📚 Iniciando inscripción', [
-                'user_id' => $this->user->id,
-                'moodle_user_id' => $this->user->moodle_user_id,
-                'course_id' => $this->courseId,
-            ]);
-
-            // Validar que el usuario tenga moodle_user_id
-            if (empty($this->user->moodle_user_id)) {
-                throw new \Exception(
-                    "Usuario {$this->user->id} no tiene moodle_user_id. " .
-                    "Posiblemente el CreateMoodleUserJob aún no terminó."
-                );
-            }
-
-            // Verificar si ya está inscrito
-            if ($moodleService->isUserEnrolled((int) $this->user->moodle_user_id, $this->courseId)) {
-                Log::info('ℹ️ Usuario ya inscrito', [
-                    'user_id' => $this->user->id,
-                    'moodle_user_id' => $this->user->moodle_user_id,
-                    'course_id' => $this->courseId,
-                ]);
+            if ($moodleService->isUserEnrolled($this->user->id, $this->courseId)) {
+                Log::info('ℹ️ Usuario ya inscrito', ['user_id' => $this->user->id]);
                 return;
             }
 
-            // Inscribir en Moodle
-            $result = $moodleService->enrollUser(
-                (int) $this->user->moodle_user_id,
+            $enrolled = $moodleService->enrollUser(
+                $this->user->id,
                 $this->courseId,
-                $this->roleId ?? 5
+                $this->roleId
             );
+
+            if (!$enrolled) {
+                throw MoodleServiceException::enrollmentFailed(
+                    $this->user->id,
+                    $this->courseId,
+                    'Service returned false'
+                );
+            }
 
             Log::info('✅ Inscripción exitosa', [
                 'user_id' => $this->user->id,
-                'moodle_user_id' => $this->user->moodle_user_id,
                 'course_id' => $this->courseId,
-                'result' => $result,
             ]);
 
         } catch (\Throwable $e) {
             Log::error('❌ Error en inscripción', [
                 'user_id' => $this->user->id,
-                'user_email' => $this->user->email,
-                'moodle_user_id' => $this->user->moodle_user_id ?? null,
                 'course_id' => $this->courseId,
                 'error' => $e->getMessage(),
                 'attempt' => $this->attempts(),
             ]);
 
-            // Si es el último intento, no reintentar
             if ($this->attempts() >= $this->tries) {
                 $this->fail($e);
                 return;
@@ -97,8 +80,6 @@ class EnrollUserInCourseJob implements ShouldQueue
     {
         Log::critical('💥 EnrollUserInCourseJob falló permanentemente', [
             'user_id' => $this->user->id,
-            'user_email' => $this->user->email,
-            'moodle_user_id' => $this->user->moodle_user_id ?? null,
             'course_id' => $this->courseId,
             'error' => $exception->getMessage(),
         ]);

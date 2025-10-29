@@ -4,11 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-<<<<<<< HEAD
-    "content-hash": "5f0d1644dd016cda0a7373ac0cae1d89",
-=======
     "content-hash": "c563999a0343aadb5ad1267625d333c7",
->>>>>>> a1db5e1 (🔒 Seguridad: Proteger rutas API con middleware auth:sanctum)
     "packages": [
         {
             "name": "brick/math",

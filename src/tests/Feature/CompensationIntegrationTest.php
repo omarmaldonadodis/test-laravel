@@ -77,63 +77,72 @@ class CompensationIntegrationTest extends TestCase
         ]);
     }
 
-    /**
-     * INTEGRATION TEST 2: Usuario creado pero inscripción falla
-     * CreateUser -> Event -> EnrollUser FAILS -> Compensation
-     */
-    public function test_user_created_enrollment_fails_compensation_triggered()
-    {
-        Queue::fake();
+   /**
+ * INTEGRATION TEST 2: Usuario creado pero inscripción falla
+ * CreateUser -> Event -> EnrollUser FAILS -> Compensation
+ */
+public function test_user_created_enrollment_fails_compensation_triggered()
+{
+    Queue::fake();
 
-        $orderDTO = new MedusaOrderDTO(
-            orderId: 'int_fail_' . uniqid(),
-            customerEmail: 'fail@test.com',
-            customerFirstName: 'Fail',
-            customerLastName: 'Test',
-            items: []
-        );
+    $orderDTO = new MedusaOrderDTO(
+        orderId: 'int_fail_' . uniqid(),
+        customerEmail: 'fail@test.com',
+        customerFirstName: 'Fail',
+        customerLastName: 'Test',
+        items: []
+    );
 
-        // Simular creación exitosa
-        Http::fake([
-            '*/webservice/rest/server.php*' => Http::sequence()
-                ->push([], 200) // getUserByEmail
-                ->push([['id' => 888, 'username' => 'failtest']], 200) // createUser
-                ->push(['exception' => 'Course not found'], 200), // enrollUser FAILS
-        ]);
+    // Simular creación exitosa
+    Http::fake([
+        '*/webservice/rest/server.php*' => Http::sequence()
+            ->push([], 200) // getUserByEmail
+            ->push([['id' => 888, 'username' => 'failtest']], 200) // createUser
+            ->push(['exception' => 'Course not found'], 200), // enrollUser FAILS
+    ]);
 
-        // Ejecutar job de creación
-        $job = new CreateMoodleUserJob($orderDTO);
-        $job->handle(app(\App\Contracts\MoodleServiceInterface::class));
+    // Ejecutar job de creación
+    $job = new CreateMoodleUserJob($orderDTO);
+    $job->handle(app(\App\Contracts\MoodleServiceInterface::class));
 
-        // Crear usuario en BD (lo haría el listener)
-        $user = User::create([
-            'name' => 'Fail Test',
-            'email' => 'fail@test.com',
-            'password' => bcrypt('test'),
-            'moodle_user_id' => 888,
-            'medusa_order_id' => $orderDTO->orderId,
-        ]);
+    // Crear usuario en BD (lo haría el listener)
+    $user = User::create([
+        'name' => 'Fail Test',
+        'email' => 'fail@test.com',
+        'password' => bcrypt('test'),
+        'moodle_user_id' => 888,
+        'medusa_order_id' => $orderDTO->orderId,
+    ]);
 
-        // Intentar inscripción (debería fallar)
-        try {
-            $enrollJob = new EnrollUserInCourseJob($user, 2);
-            $enrollJob->handle(app(\App\Contracts\MoodleServiceInterface::class));
-        } catch (\Exception $e) {
-            // Se espera el error
-        }
+    $userDTO = new \App\DTOs\MoodleUserDTO(
+        email: $user->email,
+        firstname: $user->name, // o divide si tienes nombre y apellido separados
+        lastname: '',
+        username: $user->email,
+        password: 'fakepassword',
+        id: $user->moodle_user_id
+    );
 
-        // Verificar que se registró el fallo (esto lo haría el sistema real)
-        $compensationService = app(\App\Services\Compensation\MoodleCompensationService::class);
-        $compensationService->recordUserCreation(888, $orderDTO->orderId);
-        $compensationService->compensateFailedEnrollment($orderDTO->orderId, 'Course not found');
-
-        // Verificar registro de compensación
-        $this->assertDatabaseHas('failed_enrollments', [
-            'order_id' => $orderDTO->orderId,
-            'moodle_user_id' => 888,
-            'requires_manual_review' => true,
-        ]);
+    // Intentar inscripción (debería fallar)
+    try {
+        $enrollJob = new EnrollUserInCourseJob($userDTO, 2);
+        $enrollJob->handle(app(\App\Contracts\MoodleServiceInterface::class));
+    } catch (\Exception $e) {
+        // Se espera el error
     }
+
+    // Verificar que se registró el fallo (esto lo haría el sistema real)
+    $compensationService = app(\App\Services\Compensation\MoodleCompensationService::class);
+    $compensationService->recordUserCreation(888, $orderDTO->orderId);
+    $compensationService->compensateFailedEnrollment($orderDTO->orderId, 'Course not found');
+
+    // Verificar registro de compensación
+    $this->assertDatabaseHas('failed_enrollments', [
+        'order_id' => $orderDTO->orderId,
+        'moodle_user_id' => 888,
+        'requires_manual_review' => true,
+    ]);
+}
 
     /**
      * INTEGRATION TEST 3: Reintento exitoso después de fallo

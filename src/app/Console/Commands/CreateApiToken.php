@@ -1,8 +1,4 @@
 <?php
-<<<<<<< HEAD
-=======
-
->>>>>>> a1db5e1 (🔒 Seguridad: Proteger rutas API con middleware auth:sanctum)
 namespace App\Console\Commands;
 
 use App\Models\User;
@@ -10,7 +6,6 @@ use Illuminate\Console\Command;
 
 class CreateApiToken extends Command
 {
-<<<<<<< HEAD
     protected $signature = 'api:create-token 
                             {email : Email del usuario}
                             {name=api-token : Nombre del token}';
@@ -41,22 +36,3 @@ class CreateApiToken extends Command
         return 0;
     }
 }
-=======
-    protected $signature = 'token:create {email}';
-    protected $description = 'Create API token for user';
-
-    public function handle()
-    {
-        $email = $this->argument('email');
-        $user = User::where('email', $email)->first();
-
-        if (!$user) {
-            $this->error("User not found");
-            return;
-        }
-
-        $token = $user->createToken('api-token')->plainTextToken;
-        $this->info("Token: {$token}");
-    }
-}
->>>>>>> a1db5e1 (🔒 Seguridad: Proteger rutas API con middleware auth:sanctum)
